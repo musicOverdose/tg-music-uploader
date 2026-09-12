@@ -16,7 +16,7 @@ services:
       # Maps to the data folder you created on your VPS
       - /opt/tg-music-uploader/data:/data
       # Maps to the music folder you created on your VPS (Read-Only)
-      - /opt/tg-music-uploader/music:/music:ro
+      - /opt/tg-music-uploader/music:/music
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/api/health"]
       interval: 30s
