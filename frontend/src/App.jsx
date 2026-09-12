@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Folder, Music, Send, CheckCircle2, AlertCircle, 
   Settings as SettingsIcon, List, Server, Search, 
-  PlayCircle, Clock, HardDrive, RefreshCw, LogOut, ChevronRight, Hash, FileText
+  PlayCircle, Clock, HardDrive, RefreshCw, LogOut, ChevronRight, Hash, FileText,
+  Image as ImageIcon, X
 } from 'lucide-react';
 
 export default function App() {
@@ -20,6 +21,10 @@ export default function App() {
   const [authRequired, setAuthRequired] = useState(false);
   const [password, setPassword] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  
+  // Modal States
+  const [showCoverModal, setShowCoverModal] = useState(false);
+  const [coverRes, setCoverRes] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
     fetchSettings();
@@ -274,15 +279,27 @@ export default function App() {
                     <h3 className="text-sm font-medium text-zinc-500">Select a folder to view files</h3>
                   )}
                   
-                  {files.length > 0 && (
-                    <button
-                      onClick={() => enqueue(files.map(f => f.path), true)}
-                      disabled={isUploading}
-                      className="bg-zinc-100 hover:bg-white text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-                    >
-                      <PlayCircle className="w-4 h-4" /> Upload Full Album
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {/* NEW: View Cover Button */}
+                    {files.length > 0 && files[0].has_folder_cover && (
+                      <button
+                        onClick={() => { setCoverRes({w:0,h:0}); setShowCoverModal(true); }}
+                        className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all shadow-sm"
+                      >
+                        <ImageIcon className="w-4 h-4" /> View Cover
+                      </button>
+                    )}
+                    
+                    {files.length > 0 && (
+                      <button
+                        onClick={() => enqueue(files.map(f => f.path), true)}
+                        disabled={isUploading}
+                        className="bg-zinc-100 hover:bg-white text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                      >
+                        <PlayCircle className="w-4 h-4" /> Upload Full Album
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-2">
@@ -299,14 +316,18 @@ export default function App() {
                       <tbody>
                         {files.map((file) => (
                           <tr key={file.path} className="group bg-zinc-950/20 hover:bg-zinc-800/40 transition-colors rounded-xl">
+                            {/* UPDATED: Added a # before the track number */}
                             <td className="py-3 pl-4 rounded-l-xl text-center text-zinc-500 font-mono text-xs">
-                              {file.metadata.track || '-'}
+                              {file.metadata.track ? `#${file.metadata.track}` : '-'}
                             </td>
                             <td className="py-3">
                               <div className="font-semibold text-zinc-200 truncate max-w-sm">{file.metadata.title || file.filename}</div>
                               <div className="text-xs text-zinc-500 mt-0.5 truncate flex items-center gap-2">
                                 {file.metadata.artist || 'Unknown Artist'}
-                                <span className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">{file.metadata.year || '----'}</span>
+                                {/* UPDATED: Added "Year: " so it's clearer */}
+                                <span className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
+                                  {file.metadata.year ? `Year: ${file.metadata.year}` : '----'}
+                                </span>
                               </div>
                             </td>
                             <td className="py-3 text-zinc-400 text-xs font-medium">
@@ -416,7 +437,6 @@ export default function App() {
           {activeTab === 'settings' && (
             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
               
-              {/* API Settings Box */}
               <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl backdrop-blur-xl h-fit">
                 <div className="p-5 border-b border-zinc-800/80 bg-zinc-900/50">
                   <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
@@ -466,7 +486,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Index Post Settings Box */}
               <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl backdrop-blur-xl h-fit flex flex-col">
                 <div className="p-5 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
                   <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
@@ -511,7 +530,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Save Button spanning full width */}
               <div className="col-span-1 md:col-span-2 p-6 bg-zinc-900/80 border border-zinc-800/80 rounded-2xl flex items-center justify-between">
                 <button 
                   onClick={testBot} 
@@ -532,6 +550,34 @@ export default function App() {
 
             </div>
           )}
+
+          {/* NEW: Cover Image Modal */}
+          {showCoverModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 max-w-2xl w-full flex flex-col shadow-2xl relative">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Album Cover</h3>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Resolution: {coverRes.w > 0 ? <strong className="text-indigo-400">{coverRes.w} x {coverRes.h} px</strong> : 'Calculating...'}
+                    </p>
+                  </div>
+                  <button onClick={() => setShowCoverModal(false)} className="p-2 bg-zinc-800 hover:bg-red-500 hover:text-white rounded-lg transition-all text-zinc-400">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="bg-black/50 rounded-xl overflow-hidden flex items-center justify-center min-h-[300px]">
+                  <img 
+                    src={`/api/library/cover?path=${encodeURIComponent(selectedFolder)}`} 
+                    alt="Cover" 
+                    className="max-h-[60vh] object-contain shadow-2xl"
+                    onLoad={(e) => setCoverRes({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </main>
     </div>
