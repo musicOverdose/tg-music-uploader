@@ -16,7 +16,8 @@ class TelegramManager:
             if not data.get("ok"): raise Exception(data.get("description", "Auth failed"))
             return data["result"]["username"]
 
-    async def upload_audio(self, file_path: str, destination: str, metadata: dict, thumb_path: str = None):
+    # --- NEW: Added thumb_bytes parameter to accept our resized BytesIO output ---
+    async def upload_audio(self, file_path: str, destination: str, metadata: dict, thumb_path: str = None, thumb_bytes: bytes = None):
         url = f"{self.base_url}{self.bot_token}/sendAudio"
         data = {
             "chat_id": destination,
@@ -27,9 +28,17 @@ class TelegramManager:
         async with httpx.AsyncClient(timeout=300.0) as client:
             with open(file_path, "rb") as audio_file:
                 files = {"audio": (os.path.basename(file_path), audio_file, "audio/mpeg")}
-                thumb_file = open(thumb_path, "rb") if thumb_path and os.path.exists(thumb_path) else None
-                if thumb_file: files["thumbnail"] = (os.path.basename(thumb_path), thumb_file, "image/jpeg")
-                try: resp = await client.post(url, data=data, files=files)
+                
+                thumb_file = None
+                # Prioritize dynamically generated thumbnail bytes
+                if thumb_bytes:
+                    files["thumbnail"] = ("cover.jpg", thumb_bytes, "image/jpeg")
+                elif thumb_path and os.path.exists(thumb_path):
+                    thumb_file = open(thumb_path, "rb")
+                    files["thumbnail"] = (os.path.basename(thumb_path), thumb_file, "image/jpeg")
+                    
+                try: 
+                    resp = await client.post(url, data=data, files=files)
                 finally:
                     if thumb_file: thumb_file.close()
 
