@@ -4,7 +4,8 @@ import os
 from sqlmodel import Session, select
 from backend.database import engine, Job, Settings
 from backend.telegram_client import tg_client
-from backend.library import extract_metadata, find_cover
+# --- IMPORT OUR NEW FUNCTION ---
+from backend.library import extract_metadata, find_cover, extract_and_resize_cover_from_mp3
 
 connected_clients = set()
 
@@ -61,7 +62,6 @@ async def process_queue():
                     caption = f"{year} - {album_name}"
                     msg_id = await tg_client.upload_photo(job_file_path, job_dest, caption=caption)
 
-                    # Build Telegram post link
                     dest_str = str(job_dest).strip()
                     if dest_str.startswith("-100"):
                         raw_id = dest_str[4:]
@@ -74,8 +74,16 @@ async def process_queue():
 
                 else:
                     meta = extract_metadata(job_file_path)
-                    thumb = find_cover(os.path.dirname(job_file_path))
-                    await tg_client.upload_audio(job_file_path, job_dest, meta, thumb)
+                    
+                    # --- NEW: Dynamically grab resized 320x320 thumbnail from APIC tag ---
+                    thumb_bytes = extract_and_resize_cover_from_mp3(job_file_path)
+                    
+                    # If the MP3 had no cover, fallback to scanning the folder
+                    thumb_path = None
+                    if not thumb_bytes:
+                        thumb_path = find_cover(os.path.dirname(job_file_path))
+                        
+                    await tg_client.upload_audio(job_file_path, job_dest, meta, thumb_path, thumb_bytes)
                 
                 with Session(engine) as session:
                     f_job = session.get(Job, job_id)
