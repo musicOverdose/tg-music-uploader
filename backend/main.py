@@ -14,6 +14,7 @@ from backend.queue_manager import process_queue, connected_clients
 app = FastAPI(title="Telegram Music Uploader")
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "supersecret")
+REPORT_PATH = "/data/report.txt"
 background_tasks = set() 
 
 @app.middleware("http")
@@ -68,9 +69,6 @@ class SettingsUpdate(BaseModel):
     default_dest: str
     delay_per_file_min: int
     delay_per_file_max: int
-    report_channel: str
-    report_message_id: str
-    report_text: str
 
 @app.post("/api/settings")
 async def update_settings(data: SettingsUpdate):
@@ -80,9 +78,6 @@ async def update_settings(data: SettingsUpdate):
         settings.default_dest = data.default_dest
         settings.delay_per_file_min = data.delay_per_file_min
         settings.delay_per_file_max = data.delay_per_file_max
-        settings.report_channel = data.report_channel
-        settings.report_message_id = data.report_message_id
-        settings.report_text = data.report_text
         session.add(settings)
         session.commit()
         
@@ -95,6 +90,30 @@ async def update_settings(data: SettingsUpdate):
             raise HTTPException(status_code=400, detail=str(e))
     return {"status": "ok"}
 
+# --- Report File Endpoints ---
+@app.get("/api/report")
+def get_report():
+    if not os.path.exists(REPORT_PATH):
+        return {"content": ""}
+    with open(REPORT_PATH, "r", encoding="utf-8") as f:
+        return {"content": f.read()}
+
+class ReportUpdateReq(BaseModel):
+    content: str
+
+@app.post("/api/report")
+def update_report(req: ReportUpdateReq):
+    with open(REPORT_PATH, "w", encoding="utf-8") as f:
+        f.write(req.content)
+    return {"status": "saved"}
+
+@app.post("/api/report/clear")
+def clear_report():
+    with open(REPORT_PATH, "w", encoding="utf-8") as f:
+        f.write("")
+    return {"status": "cleared"}
+
+# --- Library Endpoints ---
 @app.get("/api/library/tree")
 def lib_tree():
     with Session(engine) as session:
@@ -142,7 +161,6 @@ def clean_meta(req: CleanReq):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- NEW: Folder Status Routes ---
 @app.get("/api/folders/status")
 def get_folder_status():
     with Session(engine) as session:
@@ -163,7 +181,7 @@ def set_folder_status(req: FolderStatusReq):
         session.commit()
     return {"status": "ok"}
 
-# --- Queue Routes ---
+# --- Queue Endpoints ---
 class EnqueueReq(BaseModel):
     files: List[str]
     destination: str
@@ -183,7 +201,6 @@ def add_to_queue(req: EnqueueReq):
         session.commit()
     return {"status": "enqueued"}
 
-# NEW: Bulk Add Folders
 class EnqueueFoldersReq(BaseModel):
     folders: List[str]
     destination: str
@@ -202,11 +219,9 @@ def add_folders_to_queue(req: EnqueueFoldersReq):
             for f in files:
                 session.add(Job(file_path=f["path"], destination=req.destination))
             
-            # Automatically mark folder as done when enqueued
             record = session.get(UploadedFolder, folder)
             if record: record.is_done = True
             else: session.add(UploadedFolder(path=folder, is_done=True))
-
         session.commit()
     return {"status": "enqueued"}
 
