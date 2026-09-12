@@ -12,16 +12,20 @@ class Settings(SQLModel, table=True):
     default_dest: str = Field(default="")
     music_root: str = Field(default="/music")
     
-    # Rate Limiting & Safety
+    # Rate Limiting
     delay_per_file_min: int = Field(default=3)
     delay_per_file_max: int = Field(default=7)
-    delay_between_albums: int = Field(default=20)
+    
+    # NEW: Index/Report Post Settings
+    report_channel: str = Field(default="")
+    report_message_id: str = Field(default="")
+    report_text: str = Field(default="") # Stores the accumulated Markdown list
 
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     file_path: str
     destination: str
-    status: str = Field(default="pending") # pending, uploading, done, failed, cancelled
+    status: str = Field(default="pending") 
     progress: int = Field(default=0)
     error_msg: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
