@@ -1,52 +1,70 @@
 import os
-from mutagen.easyid3 import EasyID3
-from mutagen.mp3 import MP3
+from mutagen import File as MutagenFile
 
-MUSIC_ROOT = "/music"
-
-def scan_directory(path: str = ""):
-    full_path = os.path.join(MUSIC_ROOT, path)
-    if not os.path.exists(full_path):
+def get_directory_tree(path="/music"):
+    if not os.path.exists(path):
         return []
-        
-    items = []
-    for entry in os.scandir(full_path):
-        if entry.is_dir():
-            items.append({
-                "type": "folder",
-                "name": entry.name,
-                "path": os.path.join(path, entry.name)
+    
+    tree = []
+    for item in os.listdir(path):
+        full_path = os.path.join(path, item)
+        if os.path.isdir(full_path):
+            tree.append({
+                "name": item,
+                "path": full_path,
+                "type": "folder"
             })
-        elif entry.is_file() and entry.name.lower().endswith('.mp3'):
-            file_info = get_mp3_info(entry.path)
-            items.append({
-                "type": "file",
-                "name": entry.name,
-                "path": os.path.join(path, entry.name),
-                "metadata": file_info
-            })
-    return sorted(items, key=lambda x: (x['type'] == 'file', x['name']))
+    return sorted(tree, key=lambda x: x["name"].lower())
 
-def get_mp3_info(file_path: str):
+def get_files_in_dir(path):
+    if not os.path.exists(path) or not os.path.isdir(path):
+        return []
+    
+    files = []
+    cover_found = find_cover(path) is not None
+
+    for item in os.listdir(path):
+        if item.lower().endswith('.mp3'):
+            full_path = os.path.join(path, item)
+            size = os.path.getsize(full_path)
+            meta = extract_metadata(full_path)
+            files.append({
+                "filename": item,
+                "path": full_path,
+                "size": size,
+                "metadata": meta,
+                "has_folder_cover": cover_found
+            })
+    return sorted(files, key=lambda x: x["filename"].lower())
+
+def find_cover(folder_path):
+    valid_names = ['cover.jpg', 'folder.jpg', 'cover.png', 'front.jpg']
+    for name in valid_names:
+        p = os.path.join(folder_path, name)
+        if os.path.exists(p):
+            return p
+    # Fallback: case insensitive search
+    for item in os.listdir(folder_path):
+        if item.lower() in valid_names:
+            return os.path.join(folder_path, item)
+    return None
+
+def extract_metadata(filepath):
     try:
-        audio = MP3(file_path, ID3=EasyID3)
+        audio = MutagenFile(filepath)
+        if audio is None:
+            return {}
+        
+        title = audio.tags.get('TIT2', [None])[0] if 'TIT2' in audio.tags else None
+        artist = audio.tags.get('TPE1', [None])[0] if 'TPE1' in audio.tags else None
+        album = audio.tags.get('TALB', [None])[0] if 'TALB' in audio.tags else None
+        duration = int(audio.info.length) if hasattr(audio.info, 'length') else 0
+        
         return {
-            "title": audio.get("title", [""])[0],
-            "artist": audio.get("artist", [""])[0],
-            "album": audio.get("album", [""])[0],
-            "duration": int(audio.info.length) if audio.info else 0
+            "title": str(title) if title else "Unknown Title",
+            "artist": str(artist) if artist else "Unknown Artist",
+            "album": str(album) if album else "Unknown Album",
+            "duration": duration
         }
     except Exception:
-        return {"title": os.path.basename(file_path), "artist": "", "album": "", "duration": 0}
-
-def find_cover(dir_path: str):
-    valid_names = ["cover.jpg", "folder.jpg", "cover.png", "front.jpg"]
-    for name in valid_names:
-        cover_path = os.path.join(dir_path, name)
-        if os.path.exists(cover_path):
-            return cover_path
-    # Case insensitive fallback
-    for file in os.listdir(dir_path):
-        if file.lower() in valid_names:
-            return os.path.join(dir_path, file)
-    return None
+        return {"title": "Unknown", "artist": "Unknown", "album": "Unknown", "duration": 0}
