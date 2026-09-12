@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 from sqlmodel import Session, select
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 from backend.database import engine, init_db, Settings, Job, UploadedFolder
 from backend.library import get_directory_tree, get_files_in_dir
 from backend.telegram_client import tg_client
@@ -90,7 +90,6 @@ async def update_settings(data: SettingsUpdate):
             raise HTTPException(status_code=400, detail=str(e))
     return {"status": "ok"}
 
-# --- Report File Endpoints ---
 @app.get("/api/report")
 def get_report():
     if not os.path.exists(REPORT_PATH):
@@ -113,7 +112,6 @@ def clear_report():
         f.write("")
     return {"status": "cleared"}
 
-# --- Library Endpoints ---
 @app.get("/api/library/tree")
 def lib_tree():
     with Session(engine) as session:
@@ -181,7 +179,20 @@ def set_folder_status(req: FolderStatusReq):
         session.commit()
     return {"status": "ok"}
 
-# --- Queue Endpoints ---
+# --- NEW: Bulk update folder status endpoint ---
+class BulkFolderStatusReq(BaseModel):
+    status_map: Dict[str, bool]
+
+@app.post("/api/folders/status/bulk")
+def bulk_set_folder_status(req: BulkFolderStatusReq):
+    with Session(engine) as session:
+        for path, is_done in req.status_map.items():
+            record = session.get(UploadedFolder, path)
+            if record: record.is_done = is_done
+            else: session.add(UploadedFolder(path=path, is_done=is_done))
+        session.commit()
+    return {"status": "ok"}
+
 class EnqueueReq(BaseModel):
     files: List[str]
     destination: str
