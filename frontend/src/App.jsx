@@ -191,11 +191,15 @@ export default function App() {
           </button>
         </nav>
         
-        <div className="p-6 border-t border-zinc-800/80">
-          <div className="flex items-center gap-3 text-xs text-zinc-500">
+<div className="p-5 border-t border-zinc-800/80 flex flex-col gap-4 bg-zinc-900/20">
+          <div className="flex items-center gap-3 text-xs text-zinc-500 px-1">
             <Server className="w-4 h-4" />
             <span className="truncate flex-1">System Online</span>
             <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+          </div>
+          <div className="text-[10px] text-zinc-600 font-semibold text-center uppercase tracking-widest pt-2 border-t border-zinc-800/50">
+            Made by Farzad <br/>
+            <span className="text-indigo-400/70 lowercase tracking-normal text-xs font-medium">@MusicOverdose</span>
           </div>
         </div>
       </aside>
