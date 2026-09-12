@@ -14,7 +14,7 @@ from backend.queue_manager import process_queue, connected_clients
 app = FastAPI(title="Telegram Music Uploader")
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "supersecret")
-background_tasks = set() # Strong reference to prevent worker from dying
+background_tasks = set() 
 
 @app.middleware("http")
 async def check_auth(request: Request, call_next):
@@ -28,16 +28,21 @@ async def check_auth(request: Request, call_next):
 async def on_startup():
     init_db()
     with Session(engine) as session:
+        stuck_jobs = session.exec(select(Job).where(Job.status == "uploading")).all()
+        for sj in stuck_jobs:
+            sj.status = "pending"
+            sj.progress = 0
+            session.add(sj)
+        session.commit()
+        
         settings = session.get(Settings, 1)
         if settings and settings.bot_token:
             tg_client.set_token(settings.bot_token)
             
-    # Start background queue processor safely
     task = asyncio.create_task(process_queue())
     background_tasks.add(task)
     task.add_done_callback(background_tasks.discard)
 
-# --- Routes ---
 class LoginReq(BaseModel):
     password: str
 
@@ -63,6 +68,9 @@ class SettingsUpdate(BaseModel):
     default_dest: str
     delay_per_file_min: int
     delay_per_file_max: int
+    report_channel: str
+    report_message_id: str
+    report_text: str
 
 @app.post("/api/settings")
 async def update_settings(data: SettingsUpdate):
@@ -72,6 +80,9 @@ async def update_settings(data: SettingsUpdate):
         settings.default_dest = data.default_dest
         settings.delay_per_file_min = data.delay_per_file_min
         settings.delay_per_file_max = data.delay_per_file_max
+        settings.report_channel = data.report_channel
+        settings.report_message_id = data.report_message_id
+        settings.report_text = data.report_text
         session.add(settings)
         session.commit()
         
@@ -124,7 +135,7 @@ def get_queue():
 @app.post("/api/queue/clear")
 def clear_queue():
     with Session(engine) as session:
-        jobs = session.exec(select(Job).where(Job.status.in_(["done", "failed", "cancelled"]))).all()
+        jobs = session.exec(select(Job)).all()
         for j in jobs:
             session.delete(j)
         session.commit()
@@ -140,6 +151,5 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         connected_clients.remove(websocket)
 
-# --- Mount Frontend ---
 if os.path.exists("/app/frontend/dist"):
     app.mount("/", StaticFiles(directory="/app/frontend/dist", html=True), name="frontend")
