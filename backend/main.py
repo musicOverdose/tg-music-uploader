@@ -105,7 +105,6 @@ def lib_tree():
 def lib_files(path: str):
     return get_files_in_dir(path)
 
-# --- NEW ROUTE: Serve the Cover Image ---
 @app.get("/api/library/cover")
 def get_cover_image(path: str):
     from backend.library import find_cover
@@ -113,6 +112,35 @@ def get_cover_image(path: str):
     if cover_path and os.path.exists(cover_path):
         return FileResponse(cover_path)
     raise HTTPException(status_code=404, detail="Cover not found")
+
+class MetaUpdateReq(BaseModel):
+    filepath: str
+    title: str
+    artist: str
+    album: str
+    year: str
+    track: str
+
+@app.post("/api/library/metadata")
+def update_meta(req: MetaUpdateReq):
+    from backend.library import update_metadata
+    try:
+        new_meta = update_metadata(req.filepath, req.model_dump())
+        return {"status": "ok", "metadata": new_meta}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class CleanReq(BaseModel):
+    folder_path: str
+
+@app.post("/api/library/metadata/clean")
+def clean_meta(req: CleanReq):
+    from backend.library import clean_folder_metadata
+    try:
+        count = clean_folder_metadata(req.folder_path)
+        return {"status": "ok", "cleaned": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 class EnqueueReq(BaseModel):
     files: List[str]
