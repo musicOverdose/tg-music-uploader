@@ -14,8 +14,8 @@ from backend.queue_manager import process_queue, connected_clients
 app = FastAPI(title="Telegram Music Uploader")
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "supersecret")
+background_tasks = set() # Strong reference to prevent worker from dying
 
-# --- Simple Auth Middleware ---
 @app.middleware("http")
 async def check_auth(request: Request, call_next):
     if request.url.path.startswith("/api/") and request.url.path not in ["/api/login", "/api/health"]:
@@ -32,8 +32,10 @@ async def on_startup():
         if settings and settings.bot_token:
             tg_client.set_token(settings.bot_token)
             
-    # Start background queue processor
-    asyncio.create_task(process_queue())
+    # Start background queue processor safely
+    task = asyncio.create_task(process_queue())
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
 
 # --- Routes ---
 class LoginReq(BaseModel):
@@ -73,7 +75,6 @@ async def update_settings(data: SettingsUpdate):
         session.add(settings)
         session.commit()
         
-    # Re-init client if credentials changed
     if data.bot_token:
         try:
             tg_client.set_token(data.bot_token)
@@ -118,8 +119,7 @@ def add_to_queue(req: EnqueueReq):
 @app.get("/api/queue")
 def get_queue():
     with Session(engine) as session:
-        jobs = session.exec(select(Job).order_by(Job.created_at.desc())).all()
-        return jobs
+        return session.exec(select(Job).order_by(Job.created_at.desc())).all()
 
 @app.post("/api/queue/clear")
 def clear_queue():
