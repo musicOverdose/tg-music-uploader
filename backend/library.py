@@ -1,6 +1,6 @@
 import os
 from mutagen import File as MutagenFile
-from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TRCK, ID3NoHeaderError
+from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TYER, TRCK, ID3NoHeaderError
 
 def get_directory_tree(path="/music"):
     if not os.path.exists(path): return []
@@ -39,6 +39,7 @@ def extract_metadata(filepath):
     try:
         audio = MutagenFile(filepath)
         if audio is None: raise Exception()
+        
         title = audio.tags.get('TIT2', [None])[0] if 'TIT2' in audio.tags else None
         artist = audio.tags.get('TPE1', [None])[0] if 'TPE1' in audio.tags else None
         album = audio.tags.get('TALB', [None])[0] if 'TALB' in audio.tags else None
@@ -46,9 +47,20 @@ def extract_metadata(filepath):
         track_raw = str(audio.tags.get('TRCK', [0])[0]) if 'TRCK' in audio.tags else '0'
         track_num = int(track_raw.split('/')[0]) if track_raw and track_raw.split('/')[0].isdigit() else 0
         
+        # Robust Year Extraction
         year = "Unknown"
-        if 'TDRC' in audio.tags: year = str(audio.tags.get('TDRC')[0].text[0])[:4]
-        elif 'TYER' in audio.tags: year = str(audio.tags.get('TYER')[0])[:4]
+        for tag_id in ['TDRC', 'TYER', 'TDOR']:
+            if tag_id in audio.tags:
+                val = str(audio.tags[tag_id])
+                # Find the first 4-digit number in the string (e.g. "1946-01-01" -> "1946")
+                import re
+                match = re.search(r'\b(19\d\d|20\d\d)\b', val)
+                if match:
+                    year = match.group(1)
+                    break
+                elif len(val.strip()) >= 4 and val.strip()[:4].isdigit():
+                    year = val.strip()[:4]
+                    break
         
         return {
             "title": str(title) if title else "Unknown Title",
@@ -74,14 +86,13 @@ def update_metadata(filepath, meta):
     return extract_metadata(filepath)
 
 def clean_folder_metadata(folder_path):
-    allowed = {'TIT2', 'TPE1', 'TALB', 'TDRC', 'TYER', 'TRCK', 'TLEN'}
+    allowed = {'TIT2', 'TPE1', 'TALB', 'TDRC', 'TYER', 'TRCK', 'TLEN', 'TDOR'}
     cleaned_count = 0
     for item in os.listdir(folder_path):
         if item.lower().endswith('.mp3'):
             p = os.path.join(folder_path, item)
             try:
                 audio = ID3(p)
-                # Keep essential tags + Cover Art (APIC)
                 to_delete = [frame for frame in audio.keys() if frame not in allowed and not frame.startswith('APIC')]
                 if to_delete:
                     for frame in to_delete: audio.delall(frame)
