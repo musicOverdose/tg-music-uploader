@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from typing import List, Optional
-from backend.database import engine, init_db, Settings, Job
+from backend.database import engine, init_db, Settings, Job, UploadedFolder
 from backend.library import get_directory_tree, get_files_in_dir
 from backend.telegram_client import tg_client
 from backend.queue_manager import process_queue, connected_clients
@@ -142,6 +142,28 @@ def clean_meta(req: CleanReq):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- NEW: Folder Status Routes ---
+@app.get("/api/folders/status")
+def get_folder_status():
+    with Session(engine) as session:
+        records = session.exec(select(UploadedFolder)).all()
+        return {r.path: r.is_done for r in records}
+
+class FolderStatusReq(BaseModel):
+    path: str
+    is_done: bool
+
+@app.post("/api/folders/status")
+def set_folder_status(req: FolderStatusReq):
+    with Session(engine) as session:
+        record = session.get(UploadedFolder, req.path)
+        if record: record.is_done = req.is_done
+        else: record = UploadedFolder(path=req.path, is_done=req.is_done)
+        session.add(record)
+        session.commit()
+    return {"status": "ok"}
+
+# --- Queue Routes ---
 class EnqueueReq(BaseModel):
     files: List[str]
     destination: str
@@ -155,12 +177,36 @@ def add_to_queue(req: EnqueueReq):
             from backend.library import find_cover
             cover = find_cover(folder)
             if cover:
-                cover_job = Job(file_path=cover, destination=req.destination, is_cover_job=True)
-                session.add(cover_job)
-
+                session.add(Job(file_path=cover, destination=req.destination, is_cover_job=True))
         for f in req.files:
-            job = Job(file_path=f, destination=req.destination)
-            session.add(job)
+            session.add(Job(file_path=f, destination=req.destination))
+        session.commit()
+    return {"status": "enqueued"}
+
+# NEW: Bulk Add Folders
+class EnqueueFoldersReq(BaseModel):
+    folders: List[str]
+    destination: str
+    include_cover: bool = False
+
+@app.post("/api/queue/add_folders")
+def add_folders_to_queue(req: EnqueueFoldersReq):
+    with Session(engine) as session:
+        from backend.library import find_cover
+        for folder in req.folders:
+            files = get_files_in_dir(folder)
+            if req.include_cover and len(files) > 0:
+                cover = find_cover(folder)
+                if cover:
+                    session.add(Job(file_path=cover, destination=req.destination, is_cover_job=True))
+            for f in files:
+                session.add(Job(file_path=f["path"], destination=req.destination))
+            
+            # Automatically mark folder as done when enqueued
+            record = session.get(UploadedFolder, folder)
+            if record: record.is_done = True
+            else: session.add(UploadedFolder(path=folder, is_done=True))
+
         session.commit()
     return {"status": "enqueued"}
 
@@ -173,8 +219,7 @@ def get_queue():
 def clear_queue():
     with Session(engine) as session:
         jobs = session.exec(select(Job)).all()
-        for j in jobs:
-            session.delete(j)
+        for j in jobs: session.delete(j)
         session.commit()
     return {"status": "cleared"}
 
@@ -183,8 +228,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_clients.add(websocket)
     try:
-        while True:
-            await websocket.receive_text()
+        while True: await websocket.receive_text()
     except WebSocketDisconnect:
         connected_clients.remove(websocket)
 
