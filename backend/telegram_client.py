@@ -1,5 +1,4 @@
 import os
-import asyncio
 import httpx
 
 class TelegramManager:
@@ -10,13 +9,12 @@ class TelegramManager:
     def set_token(self, token: str):
         self.bot_token = token.strip()
 
-    async def get_me(self, token: str = None):
-        t = token.strip() if token else self.bot_token
-        if not t:
+    async def get_me(self):
+        if not self.bot_token:
             raise Exception("Bot token not configured")
         
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{self.base_url}{t}/getMe")
+            resp = await client.get(f"{self.base_url}{self.bot_token}/getMe")
             data = resp.json()
             if not data.get("ok"):
                 raise Exception(data.get("description", "Failed to authenticate"))
@@ -28,7 +26,7 @@ class TelegramManager:
 
         file_size = os.path.getsize(file_path)
         if file_size > 50 * 1024 * 1024:
-            raise Exception(f"File exceeds Telegram Bot API limit of 50 MB ({file_size / (1024*1024):.1f} MB)")
+            raise Exception(f"File exceeds 50 MB API limit ({file_size / (1024*1024):.1f} MB)")
 
         url = f"{self.base_url}{self.bot_token}/sendAudio"
         data = {
@@ -37,6 +35,8 @@ class TelegramManager:
             "performer": metadata.get("artist", "Unknown"),
             "duration": str(metadata.get("duration", 0))
         }
+
+        print(f"Telegram Client: Sending {os.path.basename(file_path)} to {destination}...", flush=True)
 
         async with httpx.AsyncClient(timeout=300.0) as client:
             with open(file_path, "rb") as audio_file:
@@ -54,6 +54,8 @@ class TelegramManager:
                         thumb_file.close()
 
             res_data = resp.json()
+            print(f"Telegram Client Response: {res_data}", flush=True)
+
             if resp.status_code == 429:
                 retry_after = res_data.get("parameters", {}).get("retry_after", 30)
                 raise Exception(f"FLOOD_WAIT_{retry_after}")
