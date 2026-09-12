@@ -12,14 +12,12 @@ class Settings(SQLModel, table=True):
     default_dest: str = Field(default="")
     music_root: str = Field(default="/music")
     
-    # Rate Limiting
     delay_per_file_min: int = Field(default=3)
     delay_per_file_max: int = Field(default=7)
     
-    # NEW: Index/Report Post Settings
     report_channel: str = Field(default="")
     report_message_id: str = Field(default="")
-    report_text: str = Field(default="") # Stores the accumulated Markdown list
+    report_text: str = Field(default="") 
 
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -30,6 +28,11 @@ class Job(SQLModel, table=True):
     error_msg: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     is_cover_job: bool = Field(default=False)
+
+# NEW: Track which folders are marked as "Done"
+class UploadedFolder(SQLModel, table=True):
+    path: str = Field(primary_key=True)
+    is_done: bool = Field(default=True)
 
 def init_db():
     SQLModel.metadata.create_all(engine)
