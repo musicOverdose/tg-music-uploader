@@ -8,18 +8,17 @@ services:
     ports:
       - "8081:8081"
     environment:
+      # Portainer will fill this in from the Environment variables section
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - TZ=UTC
+      # Timezone set to Tehran for accurate daily reset limits
+      - TZ=Asia/Tehran
     volumes:
-      # This mounts a named volume for the database managed by Portainer
-      - app_data:/data
-      # This mounts the host directory where your MP3s live
-      - /path/to/your/host/music:/music:ro
+      # Maps to the data folder you created on your VPS
+      - /opt/tg-music-uploader/data:/data
+      # Maps to the music folder you created on your VPS (Read-Only)
+      - /opt/tg-music-uploader/music:/music:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-
-volumes:
-  app_data:
