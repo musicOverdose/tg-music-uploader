@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  uploader:
+    build: .
+    container_name: tg-music-uploader
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - TZ=UTC
+    volumes:
+      # This mounts a named volume for the database managed by Portainer
+      - app_data:/data
+      # This mounts the host directory where your MP3s live
+      - /path/to/your/host/music:/music:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  app_data:
