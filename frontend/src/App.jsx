@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Folder, Music, Send, CheckCircle2, AlertCircle, 
   Settings as SettingsIcon, List, Server, Search, 
-  PlayCircle, Clock, HardDrive, RefreshCw, LogOut, ChevronRight
+  PlayCircle, Clock, HardDrive, RefreshCw, LogOut, ChevronRight, Hash, FileText
 } from 'lucide-react';
 
 export default function App() {
@@ -11,7 +11,10 @@ export default function App() {
   const [selectedFolder, setSelectedFolder] = useState('');
   const [files, setFiles] = useState([]);
   const [jobs, setJobs] = useState([]);
-  const [settings, setSettings] = useState({ bot_token: '', default_dest: '', delay_per_file_min: 3, delay_per_file_max: 7 });
+  const [settings, setSettings] = useState({ 
+    bot_token: '', default_dest: '', delay_per_file_min: 3, delay_per_file_max: 7,
+    report_channel: '', report_message_id: '', report_text: ''
+  });
   const [destOverride, setDestOverride] = useState('');
   const [botStatus, setBotStatus] = useState('');
   const [authRequired, setAuthRequired] = useState(false);
@@ -139,7 +142,6 @@ export default function App() {
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden selection:bg-indigo-500/30">
       
-      {/* Sidebar */}
       <aside className="w-64 bg-zinc-900/50 border-r border-zinc-800/80 flex flex-col backdrop-blur-xl">
         <div className="p-6 flex items-center gap-3">
           <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-lg shadow-lg shadow-indigo-500/20">
@@ -191,7 +193,7 @@ export default function App() {
           </button>
         </nav>
         
-<div className="p-5 border-t border-zinc-800/80 flex flex-col gap-4 bg-zinc-900/20">
+        <div className="p-5 border-t border-zinc-800/80 flex flex-col gap-4 bg-zinc-900/20">
           <div className="flex items-center gap-3 text-xs text-zinc-500 px-1">
             <Server className="w-4 h-4" />
             <span className="truncate flex-1">System Online</span>
@@ -204,11 +206,9 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col relative overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed bg-center">
         <div className="absolute inset-0 bg-zinc-950/95 z-0"></div>
         
-        {/* Top Header */}
         <header className="h-16 border-b border-zinc-800/80 px-8 flex items-center justify-between relative z-10 bg-zinc-900/30 backdrop-blur-sm">
           <div className="flex items-center gap-2 text-sm text-zinc-400 font-medium tracking-wide">
             {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} 
@@ -233,13 +233,10 @@ export default function App() {
           </div>
         </header>
 
-        {/* Dynamic Content */}
         <div className="flex-1 overflow-auto p-8 relative z-10">
           
-          {/* LIBRARY TAB */}
           {activeTab === 'library' && (
             <div className="grid grid-cols-12 gap-8 h-full max-w-7xl mx-auto">
-              {/* Folder Sidebar */}
               <div className="col-span-4 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl shadow-xl">
                 <div className="p-4 border-b border-zinc-800/80 bg-zinc-900/50">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
@@ -261,16 +258,9 @@ export default function App() {
                       <span className="truncate font-medium">{f.name}</span>
                     </button>
                   ))}
-                  {folders.length === 0 && (
-                    <div className="p-8 text-center text-zinc-600 flex flex-col items-center">
-                      <Folder className="w-8 h-8 mb-3 opacity-20" />
-                      <span className="text-xs font-medium">No folders found</span>
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* File List */}
               <div className="col-span-8 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl shadow-xl">
                 <div className="p-5 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center h-[72px]">
                   {selectedFolder ? (
@@ -278,7 +268,7 @@ export default function App() {
                       <h3 className="font-semibold text-zinc-100 text-sm truncate max-w-[300px]">
                         {selectedFolder.split('/').pop()}
                       </h3>
-                      <p className="text-xs text-zinc-500 mt-0.5">{files.length} tracks found</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{files.length} tracks (Sorted by Track #)</p>
                     </div>
                   ) : (
                     <h3 className="text-sm font-medium text-zinc-500">Select a folder to view files</h3>
@@ -300,7 +290,8 @@ export default function App() {
                     <table className="w-full text-left text-sm border-separate border-spacing-y-1">
                       <thead>
                         <tr className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider px-4">
-                          <th className="font-medium pb-2 pl-4">Track Info</th>
+                          <th className="font-medium pb-2 pl-4 w-12 text-center">#</th>
+                          <th className="font-medium pb-2">Track Info</th>
                           <th className="font-medium pb-2 w-24">Size</th>
                           <th className="font-medium pb-2 text-right pr-4">Action</th>
                         </tr>
@@ -308,9 +299,15 @@ export default function App() {
                       <tbody>
                         {files.map((file) => (
                           <tr key={file.path} className="group bg-zinc-950/20 hover:bg-zinc-800/40 transition-colors rounded-xl">
-                            <td className="py-3 pl-4 rounded-l-xl">
+                            <td className="py-3 pl-4 rounded-l-xl text-center text-zinc-500 font-mono text-xs">
+                              {file.metadata.track || '-'}
+                            </td>
+                            <td className="py-3">
                               <div className="font-semibold text-zinc-200 truncate max-w-sm">{file.metadata.title || file.filename}</div>
-                              <div className="text-xs text-zinc-500 mt-0.5 truncate">{file.metadata.artist || 'Unknown Artist'}</div>
+                              <div className="text-xs text-zinc-500 mt-0.5 truncate flex items-center gap-2">
+                                {file.metadata.artist || 'Unknown Artist'}
+                                <span className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">{file.metadata.year || '----'}</span>
+                              </div>
                             </td>
                             <td className="py-3 text-zinc-400 text-xs font-medium">
                               {(file.size / (1024 * 1024)).toFixed(1)} MB
@@ -340,7 +337,6 @@ export default function App() {
             </div>
           )}
 
-          {/* QUEUE TAB */}
           {activeTab === 'queue' && (
             <div className="max-w-5xl mx-auto bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl backdrop-blur-xl flex flex-col h-full">
               <div className="p-6 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
@@ -352,7 +348,7 @@ export default function App() {
                   onClick={() => fetch('/api/queue/clear', { method: 'POST' }).then(fetchQueue)}
                   className="text-xs font-semibold bg-zinc-800/80 hover:bg-red-500/20 hover:text-red-400 border border-zinc-700 hover:border-red-500/30 px-4 py-2 rounded-lg text-zinc-300 transition-all flex items-center gap-2"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" /> Clear History
+                  <RefreshCw className="w-3.5 h-3.5" /> Force Clear All
                 </button>
               </div>
               
@@ -417,97 +413,123 @@ export default function App() {
             </div>
           )}
 
-          {/* SETTINGS TAB */}
           {activeTab === 'settings' && (
-            <div className="max-w-2xl mx-auto">
-              <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl backdrop-blur-xl">
-                <div className="p-6 border-b border-zinc-800/80 bg-zinc-900/50">
-                  <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
-                    <SettingsIcon className="w-5 h-5 text-indigo-400" />
-                    Engine Configuration
+            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* API Settings Box */}
+              <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl backdrop-blur-xl h-fit">
+                <div className="p-5 border-b border-zinc-800/80 bg-zinc-900/50">
+                  <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+                    <SettingsIcon className="w-4 h-4 text-indigo-400" /> API Configuration
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-1">Manage API credentials and rate limits</p>
                 </div>
                 
-                <div className="p-8 space-y-6">
-                  {/* Token */}
+                <div className="p-6 space-y-5">
                   <div>
-                    <label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
-                      Telegram Bot Token
-                    </label>
+                    <label className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Bot Token</label>
                     <input
                       type="password"
-                      placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
-                      className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none transition-all font-mono"
+                      className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none font-mono"
                       value={settings.bot_token}
                       onChange={(e) => setSettings({ ...settings, bot_token: e.target.value })}
                     />
-                    <p className="text-[11px] text-zinc-600 font-medium mt-2 flex items-center gap-1">
-                      <AlertCircle className="w-3.5 h-3.5" /> Must be generated via @BotFather
-                    </p>
                   </div>
-
-                  {/* Channel */}
                   <div>
-                    <label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
-                      Default Destination
-                    </label>
+                    <label className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Default Destination</label>
                     <input
                       type="text"
-                      placeholder="@my_music_channel or -1001234567890"
-                      className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none transition-all font-mono"
+                      className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none font-mono"
                       value={settings.default_dest}
                       onChange={(e) => setSettings({ ...settings, default_dest: e.target.value })}
                     />
                   </div>
-
-                  {/* Limits */}
-                  <div className="grid grid-cols-2 gap-6 pt-4 border-t border-zinc-800/50">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
-                        Min Delay (Seconds)
-                      </label>
+                      <label className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Min Delay (s)</label>
                       <input
                         type="number"
-                        className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none transition-all"
+                        className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none"
                         value={settings.delay_per_file_min}
                         onChange={(e) => setSettings({ ...settings, delay_per_file_min: parseInt(e.target.value) || 0 })}
                       />
                     </div>
                     <div>
-                      <label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
-                        Max Delay (Seconds)
-                      </label>
+                      <label className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Max Delay (s)</label>
                       <input
                         type="number"
-                        className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none transition-all"
+                        className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none"
                         value={settings.delay_per_file_max}
                         onChange={(e) => setSettings({ ...settings, delay_per_file_max: parseInt(e.target.value) || 0 })}
                       />
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="p-6 bg-zinc-900/80 border-t border-zinc-800/80 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={testBot} 
-                      className="bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold px-6 py-2.5 rounded-xl text-white transition-all shadow-lg shadow-indigo-500/25"
-                    >
-                      Save Configuration
-                    </button>
+              {/* Index Post Settings Box */}
+              <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl backdrop-blur-xl h-fit flex flex-col">
+                <div className="p-5 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
+                  <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-emerald-400" /> Index Post Links
+                  </h3>
+                </div>
+                
+                <div className="p-6 space-y-5 flex-1 flex flex-col">
+                  <div>
+                    <label className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Report Channel (e.g. -10012345)</label>
+                    <input
+                      type="text"
+                      className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-emerald-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none font-mono"
+                      value={settings.report_channel}
+                      onChange={(e) => setSettings({ ...settings, report_channel: e.target.value })}
+                    />
                   </div>
-                  {botStatus && (
-                    <div className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${
-                      botStatus.includes('Error') 
-                        ? 'bg-red-500/10 text-red-400 border-red-500/20' 
-                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    }`}>
-                      {botStatus}
+                  <div>
+                    <label className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Target Message ID (e.g. 42)</label>
+                    <input
+                      type="text"
+                      className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-emerald-500 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none font-mono"
+                      value={settings.report_message_id}
+                      onChange={(e) => setSettings({ ...settings, report_message_id: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex-1 flex flex-col min-h-[120px]">
+                    <div className="flex justify-between items-center mb-2">
+                       <label className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-500">Accumulated Markdown HTML</label>
+                       <button 
+                         onClick={() => setSettings({...settings, report_text: ''})}
+                         className="text-[10px] text-red-400 hover:text-red-300 hover:underline"
+                       >Clear Text</button>
                     </div>
-                  )}
+                    <textarea
+                      className="w-full flex-1 bg-zinc-950/50 border border-zinc-800 focus:border-emerald-500 rounded-lg px-3 py-2 text-xs text-zinc-400 outline-none font-mono resize-none"
+                      value={settings.report_text}
+                      onChange={(e) => setSettings({ ...settings, report_text: e.target.value })}
+                      placeholder="Links will automatically generate here..."
+                    />
+                  </div>
                 </div>
               </div>
+
+              {/* Save Button spanning full width */}
+              <div className="col-span-1 md:col-span-2 p-6 bg-zinc-900/80 border border-zinc-800/80 rounded-2xl flex items-center justify-between">
+                <button 
+                  onClick={testBot} 
+                  className="bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold px-8 py-3 rounded-xl text-white transition-all shadow-lg shadow-indigo-500/25"
+                >
+                  Save All Configurations
+                </button>
+                {botStatus && (
+                  <div className={`text-xs font-semibold px-4 py-2 rounded-xl border ${
+                    botStatus.includes('Error') 
+                      ? 'bg-red-500/10 text-red-400 border-red-500/20' 
+                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  }`}>
+                    {botStatus}
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
         </div>
