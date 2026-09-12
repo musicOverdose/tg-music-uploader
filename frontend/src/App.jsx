@@ -3,7 +3,7 @@ import {
   Folder, Music, Send, CheckCircle2, AlertCircle, 
   Settings as SettingsIcon, List, Server, Search, 
   PlayCircle, Clock, HardDrive, RefreshCw, LogOut, ChevronRight, Hash, FileText,
-  Image as ImageIcon, X, Edit3, Trash2
+  Image as ImageIcon, X, Edit3, Trash2, CheckSquare
 } from 'lucide-react';
 
 export default function App() {
@@ -23,7 +23,10 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   
-  // Modal States
+  // New States for Bulk Upload & Folder Status
+  const [folderStatus, setFolderStatus] = useState({});
+  const [selectedFolders, setSelectedFolders] = useState(new Set());
+  
   const [showCoverModal, setShowCoverModal] = useState(false);
   const [coverRes, setCoverRes] = useState({ w: 0, h: 0 });
   const [editingFile, setEditingFile] = useState(null);
@@ -33,6 +36,7 @@ export default function App() {
     fetchSettings();
     fetchFolders();
     fetchQueue();
+    fetchFolderStatus();
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws/progress`);
@@ -45,9 +49,32 @@ export default function App() {
     return () => ws.close();
   }, []);
 
+  const fetchFolderStatus = async () => {
+    const res = await fetch('/api/folders/status');
+    if(res.ok) setFolderStatus(await res.json());
+  };
+
+  const toggleFolderStatus = async (path, currentStatus) => {
+    const newStatus = !currentStatus;
+    setFolderStatus(prev => ({...prev, [path]: newStatus}));
+    await fetch('/api/folders/status', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, is_done: newStatus })
+    });
+  };
+
+  const toggleFolderSelection = (path) => {
+    setSelectedFolders(prev => {
+      const next = new Set(prev);
+      if(next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
   const handleLogin = async () => {
     const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
-    if (res.ok) { setAuthRequired(false); fetchSettings(); fetchFolders(); } else { alert('Invalid Password'); }
+    if (res.ok) { setAuthRequired(false); fetchSettings(); fetchFolders(); fetchFolderStatus(); } else { alert('Invalid Password'); }
   };
 
   const fetchSettings = async () => {
@@ -87,7 +114,31 @@ export default function App() {
     if (!dest) return alert('Please enter a destination channel (@channel or ID)');
     setIsUploading(true);
     await fetch('/api/queue/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: filePaths, destination: dest, include_cover: includeCover }) });
+    
+    // Auto mark currently viewed folder as done
+    if(selectedFolder) toggleFolderStatus(selectedFolder, false);
+    
     setIsUploading(false);
+    fetchQueue();
+    setActiveTab('queue');
+  };
+
+  const uploadSelectedFolders = async () => {
+    const dest = destOverride || settings.default_dest;
+    if (!dest) return alert('Please enter a destination channel (@channel or ID)');
+    setIsUploading(true);
+    await fetch('/api/queue/add_folders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folders: Array.from(selectedFolders), destination: dest, include_cover: true })
+    });
+    
+    // UI Cleanup
+    const newStatuses = {...folderStatus};
+    selectedFolders.forEach(f => newStatuses[f] = true);
+    setFolderStatus(newStatuses);
+    
+    setIsUploading(false);
+    setSelectedFolders(new Set());
     fetchQueue();
     setActiveTab('queue');
   };
@@ -184,13 +235,45 @@ export default function App() {
           {activeTab === 'library' && (
             <div className="grid grid-cols-12 gap-8 h-full max-w-7xl mx-auto">
               <div className="col-span-4 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl shadow-xl">
-                <div className="p-4 border-b border-zinc-800/80 bg-zinc-900/50"><h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><HardDrive className="w-3.5 h-3.5" /> Mounted Volumes</h3></div>
-                <div className="p-3 overflow-y-auto flex-1 space-y-1">
-                  {folders.map((f) => (
-                    <button key={f.path} onClick={() => loadFolderFiles(f.path)} className={`w-full text-left px-4 py-3 rounded-xl text-sm flex items-center gap-3 transition-all ${selectedFolder === f.path ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-sm' : 'hover:bg-zinc-800/50 text-zinc-300 border border-transparent'}`}>
-                      <Folder className={`w-4 h-4 shrink-0 ${selectedFolder === f.path ? 'fill-indigo-500/20' : 'text-zinc-500'}`} /><span className="truncate font-medium">{f.name}</span>
+                
+                {/* NEW: Total Albums Header & Bulk Upload Button */}
+                <div className="p-4 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                    <HardDrive className="w-3.5 h-3.5" /> Volumes ({folders.length} Albums)
+                  </h3>
+                  {selectedFolders.size > 0 && (
+                    <button onClick={uploadSelectedFolders} disabled={isUploading} className="text-[10px] bg-indigo-500 hover:bg-indigo-400 text-white px-2 py-1.5 rounded font-bold transition-all shadow-md flex items-center gap-1">
+                      <Send className="w-3 h-3" /> Upload {selectedFolders.size}
                     </button>
-                  ))}
+                  )}
+                </div>
+
+                <div className="p-3 overflow-y-auto flex-1 space-y-1">
+                  {folders.map((f) => {
+                    const isDone = folderStatus[f.path] || false;
+                    const isSelected = selectedFolders.has(f.path);
+                    return (
+                      <div key={f.path} className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-all border border-transparent ${selectedFolder === f.path ? 'bg-indigo-500/10 shadow-sm' : 'hover:bg-zinc-800/50'}`}>
+                        <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => loadFolderFiles(f.path)}>
+                          <Folder className={`w-4 h-4 shrink-0 ${selectedFolder === f.path ? 'fill-indigo-500/20 text-indigo-400' : 'text-zinc-500'}`} />
+                          <span className={`truncate font-medium ${isDone ? 'text-emerald-500/70 line-through decoration-emerald-500/30' : 'text-zinc-300'}`}>{f.name}</span>
+                        </div>
+                        
+                        {/* NEW: Multi-select and Done toggles */}
+                        <div className="flex items-center gap-3 shrink-0 ml-2">
+                          <button onClick={(e) => { e.stopPropagation(); toggleFolderStatus(f.path, isDone); }} className="hover:scale-110 transition-transform">
+                            <CheckCircle2 className={`w-4 h-4 ${isDone ? 'text-emerald-500' : 'text-zinc-700 hover:text-zinc-400'}`} />
+                          </button>
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected} 
+                            onChange={(e) => toggleFolderSelection(f.path)} 
+                            className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900 cursor-pointer accent-indigo-500" 
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -225,7 +308,7 @@ export default function App() {
                         <tr className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider px-4">
                           <th className="font-medium pb-2 pl-4 w-12 text-center">#</th>
                           <th className="font-medium pb-2">Track Info</th>
-                          <th className="font-medium pb-2 w-24">Size</th>
+                          <th className="font-medium pb-2 w-24">Size & Quality</th>
                           <th className="font-medium pb-2 text-right pr-4">Action</th>
                         </tr>
                       </thead>
@@ -236,17 +319,18 @@ export default function App() {
                             <td className="py-3">
                               <div className="font-semibold text-zinc-200 truncate max-w-sm flex items-center gap-2">
                                 {file.metadata.title || file.filename}
-                                {/* EDIT BUTTON - NO LONGER HIDDEN ON HOVER */}
-                                <button onClick={() => openEditor(file)} className="text-zinc-500 hover:text-indigo-400 transition-colors">
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </button>
+                                <button onClick={() => openEditor(file)} className="text-zinc-500 hover:text-indigo-400 transition-colors"><Edit3 className="w-3.5 h-3.5" /></button>
                               </div>
                               <div className="text-xs text-zinc-500 mt-0.5 truncate flex items-center gap-2">
                                 {file.metadata.artist || 'Unknown Artist'}
                                 <span className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">{file.metadata.year ? `Year: ${file.metadata.year}` : '----'}</span>
                               </div>
                             </td>
-                            <td className="py-3 text-zinc-400 text-xs font-medium">{(file.size / (1024 * 1024)).toFixed(1)} MB</td>
+                            {/* NEW: Bitrate Display */}
+                            <td className="py-3 text-zinc-400 text-xs font-medium">
+                              <div>{(file.size / (1024 * 1024)).toFixed(1)} MB</div>
+                              {file.metadata.bitrate > 0 && <div className="text-[10px] text-zinc-500 mt-0.5">{file.metadata.bitrate} kbps</div>}
+                            </td>
                             <td className="py-3 pr-4 text-right rounded-r-xl">
                               <button onClick={() => enqueue([file.path])} className="bg-zinc-800 hover:bg-indigo-500 hover:text-white text-zinc-300 text-xs font-semibold px-3 py-1.5 rounded-md transition-all shadow-sm">Upload</button>
                             </td>
