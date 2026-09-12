@@ -2,7 +2,7 @@ import os
 import asyncio
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from typing import List, Optional
@@ -104,6 +104,15 @@ def lib_tree():
 @app.get("/api/library/files")
 def lib_files(path: str):
     return get_files_in_dir(path)
+
+# --- NEW ROUTE: Serve the Cover Image ---
+@app.get("/api/library/cover")
+def get_cover_image(path: str):
+    from backend.library import find_cover
+    cover_path = find_cover(path)
+    if cover_path and os.path.exists(cover_path):
+        return FileResponse(cover_path)
+    raise HTTPException(status_code=404, detail="Cover not found")
 
 class EnqueueReq(BaseModel):
     files: List[str]
