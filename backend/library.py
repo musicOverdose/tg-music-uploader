@@ -43,16 +43,13 @@ def extract_metadata(filepath):
         title = audio.tags.get('TIT2', [None])[0] if 'TIT2' in audio.tags else None
         artist = audio.tags.get('TPE1', [None])[0] if 'TPE1' in audio.tags else None
         album = audio.tags.get('TALB', [None])[0] if 'TALB' in audio.tags else None
-        
         track_raw = str(audio.tags.get('TRCK', [0])[0]) if 'TRCK' in audio.tags else '0'
         track_num = int(track_raw.split('/')[0]) if track_raw and track_raw.split('/')[0].isdigit() else 0
         
-        # Robust Year Extraction
         year = "Unknown"
         for tag_id in ['TDRC', 'TYER', 'TDOR']:
             if tag_id in audio.tags:
                 val = str(audio.tags[tag_id])
-                # Find the first 4-digit number in the string (e.g. "1946-01-01" -> "1946")
                 import re
                 match = re.search(r'\b(19\d\d|20\d\d)\b', val)
                 if match:
@@ -62,15 +59,18 @@ def extract_metadata(filepath):
                     year = val.strip()[:4]
                     break
         
+        # NEW: Extract Bitrate (convert bps to kbps)
+        bitrate = int(audio.info.bitrate / 1000) if hasattr(audio.info, 'bitrate') else 0
+        
         return {
             "title": str(title) if title else "Unknown Title",
             "artist": str(artist) if artist else "Unknown Artist",
             "album": str(album) if album else "Unknown Album",
             "duration": int(audio.info.length) if hasattr(audio.info, 'length') else 0,
-            "track": track_num, "year": year
+            "track": track_num, "year": year, "bitrate": bitrate
         }
     except:
-        return {"title": "Unknown", "artist": "Unknown", "album": "Unknown", "duration": 0, "track": 0, "year": "Unknown"}
+        return {"title": "Unknown", "artist": "Unknown", "album": "Unknown", "duration": 0, "track": 0, "year": "Unknown", "bitrate": 0}
 
 def update_metadata(filepath, meta):
     try: audio = ID3(filepath)
