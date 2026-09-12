@@ -1,4 +1,6 @@
 import os
+import io
+from PIL import Image
 from mutagen import File as MutagenFile
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TYER, TRCK, ID3NoHeaderError
 
@@ -35,6 +37,23 @@ def find_cover(folder_path):
             return os.path.join(folder_path, item)
     return None
 
+# --- NEW: Extract and resize embedded APIC Cover ---
+def extract_and_resize_cover_from_mp3(filepath):
+    try:
+        audio = ID3(filepath)
+        for tag in audio.values():
+            if tag.FrameID == 'APIC':
+                img_data = tag.data
+                img = Image.open(io.BytesIO(img_data))
+                img.thumbnail((320, 320))
+                out = io.BytesIO()
+                img.convert("RGB").save(out, format="JPEG", quality=85)
+                out.seek(0)
+                return out.read()
+    except Exception:
+        pass
+    return None
+
 def extract_metadata(filepath):
     try:
         audio = MutagenFile(filepath)
@@ -59,7 +78,6 @@ def extract_metadata(filepath):
                     year = val.strip()[:4]
                     break
         
-        # NEW: Extract Bitrate (convert bps to kbps)
         bitrate = int(audio.info.bitrate / 1000) if hasattr(audio.info, 'bitrate') else 0
         
         return {
