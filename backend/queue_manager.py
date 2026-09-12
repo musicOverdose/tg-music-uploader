@@ -18,7 +18,7 @@ async def broadcast_progress(job_id: int, progress: int, status: str):
             connected_clients.remove(ws)
 
 async def process_queue():
-    print("Worker: Background queue processor started successfully.", flush=True)
+    print("Worker: Started. Processing strictly 1-by-1.", flush=True)
     while True:
         try:
             with Session(engine) as session:
@@ -32,11 +32,10 @@ async def process_queue():
                 continue
 
             if not settings or not settings.bot_token:
-                print(f"Worker: Found job {job.id} but bot_token is missing in Settings. Sleeping.", flush=True)
                 await asyncio.sleep(5)
                 continue
 
-            print(f"Worker: Starting job {job.id} -> {job.file_path}", flush=True)
+            print(f"Worker: Found job {job.id}. Locking queue.", flush=True)
             tg_client.set_token(settings.bot_token)
 
             with Session(engine) as session:
@@ -61,15 +60,14 @@ async def process_queue():
                     session.add(job)
                     session.commit()
                 await broadcast_progress(job.id, 100, "done")
-                print(f"Worker: Job {job.id} finished successfully.", flush=True)
+                print(f"Worker: Job {job.id} done. Sleeping before next file...", flush=True)
 
-                # Delay logic
                 delay = random.uniform(settings.delay_per_file_min, settings.delay_per_file_max)
                 await asyncio.sleep(delay)
 
             except Exception as e:
                 err = str(e)
-                print(f"Worker: Job {job.id} failed. Error: {err}", flush=True)
+                print(f"Worker: Job {job.id} failed -> {err}", flush=True)
                 with Session(engine) as session:
                     if "FLOOD_WAIT_" in err:
                         wait_sec = int(err.split("FLOOD_WAIT_")[1])
@@ -87,6 +85,5 @@ async def process_queue():
                         await broadcast_progress(job.id, 0, "failed")
 
         except Exception as outer_e:
-            print(f"Worker: Fatal error in queue loop: {outer_e}", flush=True)
-            traceback.print_exc()
+            print(f"Worker: Error: {outer_e}", flush=True)
             await asyncio.sleep(5)
