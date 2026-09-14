@@ -3,19 +3,18 @@ import {
   Folder, Music, Send, CheckCircle2, AlertCircle, 
   Settings as SettingsIcon, List, Server, Search, 
   PlayCircle, Clock, HardDrive, RefreshCw, LogOut, ChevronRight, Hash, FileText,
-  Image as ImageIcon, X, Edit3, Trash2, Copy, Check, PauseCircle, Radio, ArrowUpCircle, Download
+  Image as ImageIcon, X, Edit3, Trash2, Copy, Check, PauseCircle, Radio
 } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('library');
-  const [queueTab, setQueueTab] = useState('active'); // active, done, failed
-  
   const [folders, setFolders] = useState([]);
   const [libStats, setLibStats] = useState({ total_folders: 0, total_files: 0 });
   const [selectedFolder, setSelectedFolder] = useState('');
   const [files, setFiles] = useState([]);
   const [jobs, setJobs] = useState([]);
   
+  // RESTORED: on_error_action: 'pause' is back in settings state
   const [settings, setSettings] = useState({ 
     bot_token: '', default_dest: '', delay_per_file_min: 3, delay_per_file_max: 7, is_paused: false, bot_name: '', dest_name: '', on_error_action: 'pause'
   });
@@ -273,7 +272,6 @@ export default function App() {
     if (res.ok) alert(`Cleaned extra tags from ${data.cleaned} files!`);
   };
 
-  // Queue View Filters
   const activeJobsList = jobs.filter(j => j.status === 'uploading' || j.status === 'pending').sort((a, b) => {
     if (a.status === 'uploading') return -1;
     if (b.status === 'uploading') return 1;
@@ -488,7 +486,6 @@ export default function App() {
                     {settings.is_paused && <span className="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-amber-500/30 flex items-center gap-1"><PauseCircle className="w-3 h-3"/> Paused</span>}
                   </h3>
                   
-                  {/* QUEUE SUB-TABS */}
                   <div className="flex bg-zinc-950/50 p-1 rounded-xl mt-3 w-fit border border-zinc-800">
                     <button onClick={() => setQueueTab('active')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${queueTab === 'active' ? 'bg-zinc-800 text-white shadow' : 'text-zinc-500 hover:text-zinc-300'}`}>Active ({activeJobsList.length})</button>
                     <button onClick={() => setQueueTab('done')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${queueTab === 'done' ? 'bg-zinc-800 text-emerald-400 shadow' : 'text-zinc-500 hover:text-emerald-500/50'}`}>Completed ({doneJobsList.length})</button>
@@ -526,7 +523,6 @@ export default function App() {
                     </div>
                     
                     <div className="flex items-center gap-6 shrink-0">
-                      {/* MOVE TO TOP BUTTON (Only for pending jobs) */}
                       {job.status === 'pending' && (
                         <button onClick={() => moveToTop(job.id)} className="text-zinc-500 hover:text-indigo-400 transition-colors flex flex-col items-center gap-1 group">
                           <ArrowUpCircle className="w-5 h-5 group-hover:-translate-y-0.5 transition-transform" />
@@ -605,7 +601,7 @@ export default function App() {
                     </div>
                   </div>
                   
-                  {/* NEW: On Upload Failure Setting */}
+                  {/* RESTORED: Error Handling Actions */}
                   <div className="col-span-2 mt-2">
                     <label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">If Upload Fails (after 3 retries)</label>
                     <div className="flex gap-4">
