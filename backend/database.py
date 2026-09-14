@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlmodel import Field, SQLModel, create_engine, Session
+from sqlmodel import Field, SQLModel, create_engine, Session, text
 from datetime import datetime
 
 sqlite_file_name = "/data/app.db"
@@ -11,13 +11,12 @@ class Settings(SQLModel, table=True):
     bot_token: str = Field(default="")
     default_dest: str = Field(default="")
     music_root: str = Field(default="/music")
-    
     delay_per_file_min: int = Field(default=3)
     delay_per_file_max: int = Field(default=7)
-    
     report_channel: str = Field(default="")
     report_message_id: str = Field(default="")
-    report_text: str = Field(default="") 
+    report_text: str = Field(default="")
+    is_paused: bool = Field(default=False)  # NEW: Pauses upload queue
 
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -28,8 +27,8 @@ class Job(SQLModel, table=True):
     error_msg: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     is_cover_job: bool = Field(default=False)
+    attempts: int = Field(default=0)  # NEW: Tracks retry attempts
 
-# NEW: Track which folders are marked as "Done"
 class UploadedFolder(SQLModel, table=True):
     path: str = Field(primary_key=True)
     is_done: bool = Field(default=True)
@@ -37,6 +36,13 @@ class UploadedFolder(SQLModel, table=True):
 def init_db():
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
+        # Auto-migrate existing databases
+        try: session.exec(text("ALTER TABLE settings ADD COLUMN is_paused BOOLEAN DEFAULT 0"))
+        except: pass
+        try: session.exec(text("ALTER TABLE job ADD COLUMN attempts INTEGER DEFAULT 0"))
+        except: pass
+        session.commit()
+        
         if not session.get(Settings, 1):
             session.add(Settings(id=1))
             session.commit()
