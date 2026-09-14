@@ -92,31 +92,25 @@ async def update_settings(data: SettingsUpdate):
 
 @app.get("/api/report")
 def get_report():
-    if not os.path.exists(REPORT_PATH):
-        return {"content": ""}
-    with open(REPORT_PATH, "r", encoding="utf-8") as f:
-        return {"content": f.read()}
+    if not os.path.exists(REPORT_PATH): return {"content": ""}
+    with open(REPORT_PATH, "r", encoding="utf-8") as f: return {"content": f.read()}
 
 class ReportUpdateReq(BaseModel):
     content: str
 
 @app.post("/api/report")
 def update_report(req: ReportUpdateReq):
-    with open(REPORT_PATH, "w", encoding="utf-8") as f:
-        f.write(req.content)
+    with open(REPORT_PATH, "w", encoding="utf-8") as f: f.write(req.content)
     return {"status": "saved"}
 
 @app.post("/api/report/clear")
 def clear_report():
-    with open(REPORT_PATH, "w", encoding="utf-8") as f:
-        f.write("")
+    with open(REPORT_PATH, "w", encoding="utf-8") as f: f.write("")
     return {"status": "cleared"}
 
 @app.get("/api/library/tree")
 def lib_tree():
-    with Session(engine) as session:
-        settings = session.get(Settings, 1)
-    return get_directory_tree(settings.music_root)
+    return get_directory_tree()
 
 @app.get("/api/library/files")
 def lib_files(path: str):
@@ -126,8 +120,7 @@ def lib_files(path: str):
 def get_cover_image(path: str):
     from backend.library import find_cover
     cover_path = find_cover(path)
-    if cover_path and os.path.exists(cover_path):
-        return FileResponse(cover_path)
+    if cover_path and os.path.exists(cover_path): return FileResponse(cover_path)
     raise HTTPException(status_code=404, detail="Cover not found")
 
 class MetaUpdateReq(BaseModel):
@@ -144,8 +137,7 @@ def update_meta(req: MetaUpdateReq):
     try:
         new_meta = update_metadata(req.filepath, req.model_dump())
         return {"status": "ok", "metadata": new_meta}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 class CleanReq(BaseModel):
     folder_path: str
@@ -153,11 +145,8 @@ class CleanReq(BaseModel):
 @app.post("/api/library/metadata/clean")
 def clean_meta(req: CleanReq):
     from backend.library import clean_folder_metadata
-    try:
-        count = clean_folder_metadata(req.folder_path)
-        return {"status": "ok", "cleaned": count}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    try: return {"status": "ok", "cleaned": clean_folder_metadata(req.folder_path)}
+    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/folders/status")
 def get_folder_status():
@@ -179,7 +168,6 @@ def set_folder_status(req: FolderStatusReq):
         session.commit()
     return {"status": "ok"}
 
-# --- NEW: Bulk update folder status endpoint ---
 class BulkFolderStatusReq(BaseModel):
     status_map: Dict[str, bool]
 
@@ -205,10 +193,8 @@ def add_to_queue(req: EnqueueReq):
             folder = os.path.dirname(req.files[0])
             from backend.library import find_cover
             cover = find_cover(folder)
-            if cover:
-                session.add(Job(file_path=cover, destination=req.destination, is_cover_job=True))
-        for f in req.files:
-            session.add(Job(file_path=f, destination=req.destination))
+            if cover: session.add(Job(file_path=cover, destination=req.destination, is_cover_job=True))
+        for f in req.files: session.add(Job(file_path=f, destination=req.destination))
         session.commit()
     return {"status": "enqueued"}
 
@@ -225,11 +211,8 @@ def add_folders_to_queue(req: EnqueueFoldersReq):
             files = get_files_in_dir(folder)
             if req.include_cover and len(files) > 0:
                 cover = find_cover(folder)
-                if cover:
-                    session.add(Job(file_path=cover, destination=req.destination, is_cover_job=True))
-            for f in files:
-                session.add(Job(file_path=f["path"], destination=req.destination))
-            
+                if cover: session.add(Job(file_path=cover, destination=req.destination, is_cover_job=True))
+            for f in files: session.add(Job(file_path=f["path"], destination=req.destination))
             record = session.get(UploadedFolder, folder)
             if record: record.is_done = True
             else: session.add(UploadedFolder(path=folder, is_done=True))
@@ -248,6 +231,27 @@ def clear_queue():
         for j in jobs: session.delete(j)
         session.commit()
     return {"status": "cleared"}
+
+# NEW: Queue Pause & Retry Routes
+@app.post("/api/queue/toggle_pause")
+def toggle_pause():
+    with Session(engine) as session:
+        s = session.get(Settings, 1)
+        s.is_paused = not s.is_paused
+        session.add(s)
+        session.commit()
+        return {"is_paused": s.is_paused}
+
+@app.post("/api/queue/retry_failed")
+def retry_failed():
+    with Session(engine) as session:
+        failed = session.exec(select(Job).where(Job.status == "failed")).all()
+        for j in failed:
+            j.status = "pending"
+            j.attempts = 0
+            session.add(j)
+        session.commit()
+    return {"status": "ok"}
 
 @app.websocket("/ws/progress")
 async def websocket_endpoint(websocket: WebSocket):
