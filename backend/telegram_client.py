@@ -14,9 +14,16 @@ class TelegramManager:
             resp = await client.get(f"{self.base_url}{self.bot_token}/getMe")
             data = resp.json()
             if not data.get("ok"): raise Exception(data.get("description", "Auth failed"))
-            return data["result"]["username"]
+            return data["result"] # Returns full bot info dict
 
-    # --- NEW: Added thumb_bytes parameter to accept our resized BytesIO output ---
+    # NEW: Fetch Channel Info
+    async def get_chat(self, chat_id: str):
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(f"{self.base_url}{self.bot_token}/getChat", params={"chat_id": chat_id})
+            data = resp.json()
+            if not data.get("ok"): raise Exception(data.get("description", "Failed to fetch Channel"))
+            return data["result"] # Returns full chat info dict
+
     async def upload_audio(self, file_path: str, destination: str, metadata: dict, thumb_path: str = None, thumb_bytes: bytes = None):
         url = f"{self.base_url}{self.bot_token}/sendAudio"
         data = {
@@ -30,7 +37,6 @@ class TelegramManager:
                 files = {"audio": (os.path.basename(file_path), audio_file, "audio/mpeg")}
                 
                 thumb_file = None
-                # Prioritize dynamically generated thumbnail bytes
                 if thumb_bytes:
                     files["thumbnail"] = ("cover.jpg", thumb_bytes, "image/jpeg")
                 elif thumb_path and os.path.exists(thumb_path):
