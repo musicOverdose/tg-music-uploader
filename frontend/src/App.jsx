@@ -3,19 +3,23 @@ import {
   Folder, Music, Send, CheckCircle2, AlertCircle, 
   Settings as SettingsIcon, List, Server, Search, 
   PlayCircle, Clock, HardDrive, RefreshCw, LogOut, ChevronRight, Hash, FileText,
-  Image as ImageIcon, X, Edit3, Trash2, Copy, Check, PauseCircle, Radio
+  Image as ImageIcon, X, Edit3, Trash2, Copy, Check, PauseCircle, Radio, ArrowUpCircle, Download
 } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('library');
+  const [queueTab, setQueueTab] = useState('active'); // active, done, failed
+  
   const [folders, setFolders] = useState([]);
   const [libStats, setLibStats] = useState({ total_folders: 0, total_files: 0 });
   const [selectedFolder, setSelectedFolder] = useState('');
   const [files, setFiles] = useState([]);
   const [jobs, setJobs] = useState([]);
+  
   const [settings, setSettings] = useState({ 
-    bot_token: '', default_dest: '', delay_per_file_min: 3, delay_per_file_max: 7, is_paused: false, bot_name: '', dest_name: ''
+    bot_token: '', default_dest: '', delay_per_file_min: 3, delay_per_file_max: 7, is_paused: false, bot_name: '', dest_name: '', on_error_action: 'pause'
   });
+  
   const [botStatus, setBotStatus] = useState('');
   const [authRequired, setAuthRequired] = useState(false);
   const [password, setPassword] = useState('');
@@ -193,6 +197,17 @@ export default function App() {
     fetchQueue();
   };
 
+  const clearQueueStatus = async (status) => {
+    if (!window.confirm(`Clear all ${status} jobs?`)) return;
+    await fetch(`/api/queue/clear_by_status/${status}`, { method: 'POST' });
+    fetchQueue();
+  };
+
+  const moveToTop = async (id) => {
+    await fetch(`/api/queue/move_top/${id}`, { method: 'POST' });
+    fetchQueue();
+  };
+
   const testBot = async () => {
     setBotStatus('Saving & Fetching info...');
     const res = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
@@ -258,6 +273,15 @@ export default function App() {
     if (res.ok) alert(`Cleaned extra tags from ${data.cleaned} files!`);
   };
 
+  // Queue View Filters
+  const activeJobsList = jobs.filter(j => j.status === 'uploading' || j.status === 'pending').sort((a, b) => {
+    if (a.status === 'uploading') return -1;
+    if (b.status === 'uploading') return 1;
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+  const doneJobsList = jobs.filter(j => j.status === 'done');
+  const failedJobsList = jobs.filter(j => j.status === 'failed');
+
   if (authRequired) {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-950 relative overflow-hidden">
@@ -273,8 +297,6 @@ export default function App() {
     );
   }
 
-  const activeJobs = jobs.filter(j => j.status === 'uploading' || j.status === 'pending').length;
-
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden selection:bg-indigo-500/30">
       <aside className="w-64 bg-zinc-900/50 border-r border-zinc-800/80 flex flex-col backdrop-blur-xl">
@@ -286,8 +308,8 @@ export default function App() {
         <nav className="px-4 py-2 space-y-1.5 flex-1">
           <button onClick={() => setActiveTab('library')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'library' ? 'bg-zinc-800/80 text-white shadow-sm border border-zinc-700/50' : 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200'}`}><Folder className="w-4 h-4" /> Library Browser</button>
           <button onClick={() => { setActiveTab('queue'); fetchQueue(); }} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'queue' ? 'bg-zinc-800/80 text-white shadow-sm border border-zinc-700/50' : 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200'}`}>
-            <div className="flex items-center gap-3"><List className="w-4 h-4" /> Queue</div>
-            {activeJobs > 0 && <span className="bg-indigo-500/20 text-indigo-400 py-0.5 px-2.5 rounded-full text-[10px] font-bold border border-indigo-500/20">{activeJobs}</span>}
+            <div className="flex items-center gap-3"><List className="w-4 h-4" /> Tasks Queue</div>
+            {activeJobsList.length > 0 && <span className="bg-indigo-500/20 text-indigo-400 py-0.5 px-2.5 rounded-full text-[10px] font-bold border border-indigo-500/20">{activeJobsList.length}</span>}
           </button>
           <button onClick={() => { setActiveTab('report'); fetchReport(); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'report' ? 'bg-zinc-800/80 text-white shadow-sm border border-zinc-700/50' : 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200'}`}><FileText className="w-4 h-4 text-emerald-400" /> Catalog Report</button>
           <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'settings' ? 'bg-zinc-800/80 text-white shadow-sm border border-zinc-700/50' : 'text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200'}`}><SettingsIcon className="w-4 h-4" /> Settings</button>
@@ -328,7 +350,6 @@ export default function App() {
             <div className="grid grid-cols-12 gap-8 h-full max-w-7xl mx-auto">
               <div className="col-span-4 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl shadow-xl">
                 
-                {/* FIXED PADDING: px-5 to match the list items (px-2 parent + px-3 child = 20px) */}
                 <div className="px-5 py-3 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className="w-5 h-5 flex justify-center items-center shrink-0">
@@ -357,13 +378,11 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* FIXED PADDING: px-2 parent */}
                 <div className="px-2 py-2 overflow-y-auto flex-1 space-y-1">
                   {folders.map((f) => {
                     const isDone = folderStatus[f.path] || false;
                     const isSelected = selectedFolders.has(f.path);
                     return (
-                      // FIXED PADDING: px-3 child
                       <div key={f.path} className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-all border border-transparent ${selectedFolder === f.path ? 'bg-indigo-500/10 shadow-sm' : 'hover:bg-zinc-800/50'}`}>
                         <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => loadFolderFiles(f.path)}>
                           <div className="w-5 h-5 flex justify-center items-center shrink-0">
@@ -468,20 +487,34 @@ export default function App() {
                     Upload Task Queue
                     {settings.is_paused && <span className="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-amber-500/30 flex items-center gap-1"><PauseCircle className="w-3 h-3"/> Paused</span>}
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-1">Monitoring background upload workers</p>
+                  
+                  {/* QUEUE SUB-TABS */}
+                  <div className="flex bg-zinc-950/50 p-1 rounded-xl mt-3 w-fit border border-zinc-800">
+                    <button onClick={() => setQueueTab('active')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${queueTab === 'active' ? 'bg-zinc-800 text-white shadow' : 'text-zinc-500 hover:text-zinc-300'}`}>Active ({activeJobsList.length})</button>
+                    <button onClick={() => setQueueTab('done')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${queueTab === 'done' ? 'bg-zinc-800 text-emerald-400 shadow' : 'text-zinc-500 hover:text-emerald-500/50'}`}>Completed ({doneJobsList.length})</button>
+                    <button onClick={() => setQueueTab('failed')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${queueTab === 'failed' ? 'bg-zinc-800 text-red-400 shadow' : 'text-zinc-500 hover:text-red-500/50'}`}>Failed ({failedJobsList.length})</button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  {jobs.some(j => j.status === 'failed') && (
-                     <button onClick={retryFailedJobs} className="text-xs font-semibold px-4 py-2 rounded-lg bg-zinc-800/80 hover:bg-indigo-500/20 hover:text-indigo-400 border border-zinc-700 transition-all flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5" /> Retry Failed</button>
-                  )}
-                  <button onClick={togglePauseQueue} className={`text-xs font-semibold px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${settings.is_paused ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30' : 'bg-zinc-800/80 hover:bg-amber-500/10 hover:text-amber-400 border border-zinc-700'}`}>
-                    {settings.is_paused ? '▶ Resume Queue' : '⏸ Pause Queue'}
-                  </button>
-                  <button onClick={() => fetch('/api/queue/clear', { method: 'POST' }).then(fetchQueue)} className="text-xs font-semibold bg-zinc-800/80 hover:bg-red-500/20 hover:text-red-400 border border-zinc-700 hover:border-red-500/30 px-4 py-2 rounded-lg text-zinc-300 transition-all flex items-center gap-2"><Trash2 className="w-3.5 h-3.5" /> Force Clear All</button>
+                
+                <div className="flex flex-col gap-2 items-end">
+                  <div className="flex items-center gap-3">
+                    <button onClick={togglePauseQueue} className={`text-xs font-semibold px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${settings.is_paused ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30' : 'bg-zinc-800/80 hover:bg-amber-500/10 hover:text-amber-400 border border-zinc-700'}`}>
+                      {settings.is_paused ? '▶ Resume Queue' : '⏸ Pause Queue'}
+                    </button>
+                    {queueTab === 'active' && <button onClick={() => fetch('/api/queue/clear', { method: 'POST' }).then(fetchQueue)} className="text-xs font-semibold bg-zinc-800/80 hover:bg-red-500/20 hover:text-red-400 border border-zinc-700 hover:border-red-500/30 px-4 py-2 rounded-lg text-zinc-300 transition-all flex items-center gap-2"><Trash2 className="w-3.5 h-3.5" /> Clear All</button>}
+                    {queueTab === 'done' && <button onClick={() => clearQueueStatus('done')} className="text-xs font-semibold bg-zinc-800/80 hover:bg-red-500/20 hover:text-red-400 border border-zinc-700 hover:border-red-500/30 px-4 py-2 rounded-lg text-zinc-300 transition-all flex items-center gap-2"><Trash2 className="w-3.5 h-3.5" /> Clear Completed</button>}
+                    {queueTab === 'failed' && (
+                      <>
+                        <button onClick={retryFailedJobs} className="text-xs font-semibold px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white transition-all flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5" /> Retry All</button>
+                        <button onClick={() => clearQueueStatus('failed')} className="text-xs font-semibold bg-zinc-800/80 hover:bg-red-500/20 hover:text-red-400 border border-zinc-700 hover:border-red-500/30 px-4 py-2 rounded-lg text-zinc-300 transition-all flex items-center gap-2"><Trash2 className="w-3.5 h-3.5" /> Clear Failed</button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
+              
               <div className="p-4 space-y-2 overflow-y-auto flex-1">
-                {jobs.map((job) => (
+                {(queueTab === 'active' ? activeJobsList : queueTab === 'done' ? doneJobsList : failedJobsList).map((job) => (
                   <div key={job.id} className="bg-zinc-950/40 border border-zinc-800/60 p-4 rounded-xl flex items-center justify-between hover:border-zinc-700/80 transition-colors">
                     <div className="flex items-start gap-4">
                       <div className={`mt-0.5 w-2 h-2 rounded-full ${job.status === 'done' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : job.status === 'failed' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : job.status === 'uploading' ? 'bg-indigo-500 animate-pulse shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'bg-zinc-600'}`} />
@@ -491,14 +524,25 @@ export default function App() {
                         {job.error_msg && (<div className="text-[11px] font-semibold text-red-400 mt-2 bg-red-500/10 px-2 py-1 rounded border border-red-500/20 inline-block">{job.error_msg}</div>)}
                       </div>
                     </div>
-                    <div className="flex flex-col items-end w-48 shrink-0">
-                      <div className="flex justify-between w-full mb-2 text-[10px] font-bold uppercase tracking-wider">
-                        <span className={`${job.status === 'done' ? 'text-emerald-400' : ''} ${job.status === 'failed' ? 'text-red-400' : ''} ${job.status === 'uploading' ? 'text-indigo-400' : ''} ${job.status === 'pending' ? 'text-zinc-500' : ''}`}>{job.status}</span>
-                        <span className="text-zinc-500">{job.progress}%</span>
-                      </div>
-                      <div className="w-full bg-zinc-800/80 rounded-full h-1.5 overflow-hidden border border-zinc-700/50">
-                        <div className={`h-full rounded-full transition-all duration-500 ${job.status === 'done' ? 'bg-emerald-500' : job.status === 'failed' ? 'bg-red-500' : 'bg-indigo-500 relative overflow-hidden'}`} style={{ width: `${job.progress}%` }}>
-                          {job.status === 'uploading' && (<div className="absolute inset-0 bg-white/20 animate-[shimmer_1.5s_infinite] -skew-x-12"></div>)}
+                    
+                    <div className="flex items-center gap-6 shrink-0">
+                      {/* MOVE TO TOP BUTTON (Only for pending jobs) */}
+                      {job.status === 'pending' && (
+                        <button onClick={() => moveToTop(job.id)} className="text-zinc-500 hover:text-indigo-400 transition-colors flex flex-col items-center gap-1 group">
+                          <ArrowUpCircle className="w-5 h-5 group-hover:-translate-y-0.5 transition-transform" />
+                          <span className="text-[9px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">To Top</span>
+                        </button>
+                      )}
+                      
+                      <div className="flex flex-col items-end w-48">
+                        <div className="flex justify-between w-full mb-2 text-[10px] font-bold uppercase tracking-wider">
+                          <span className={`${job.status === 'done' ? 'text-emerald-400' : ''} ${job.status === 'failed' ? 'text-red-400' : ''} ${job.status === 'uploading' ? 'text-indigo-400' : ''} ${job.status === 'pending' ? 'text-zinc-500' : ''}`}>{job.status}</span>
+                          <span className="text-zinc-500">{job.progress}%</span>
+                        </div>
+                        <div className="w-full bg-zinc-800/80 rounded-full h-1.5 overflow-hidden border border-zinc-700/50">
+                          <div className={`h-full rounded-full transition-all duration-500 ${job.status === 'done' ? 'bg-emerald-500' : job.status === 'failed' ? 'bg-red-500' : 'bg-indigo-500 relative overflow-hidden'}`} style={{ width: `${job.progress}%` }}>
+                            {job.status === 'uploading' && (<div className="absolute inset-0 bg-white/20 animate-[shimmer_1.5s_infinite] -skew-x-12"></div>)}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -517,6 +561,9 @@ export default function App() {
                   <p className="text-xs text-zinc-500 mt-1">Persistent log saved at <code className="text-indigo-400">/data/report.txt</code></p>
                 </div>
                 <div className="flex items-center gap-3">
+                  <a href="/api/report/download" download="catalog_report.txt" className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all shadow-md">
+                    <Download className="w-4 h-4" /> Download .txt
+                  </a>
                   <button onClick={copyToClipboard} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all shadow-md">
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     {copied ? 'Copied!' : 'Copy All Links'}
@@ -557,6 +604,20 @@ export default function App() {
                       <button onClick={() => setSettings({...settings, delay_per_file_max: settings.delay_per_file_max + 1})} className="w-11 h-11 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors font-mono text-lg border-l border-zinc-800">+</button>
                     </div>
                   </div>
+                  
+                  {/* NEW: On Upload Failure Setting */}
+                  <div className="col-span-2 mt-2">
+                    <label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">If Upload Fails (after 3 retries)</label>
+                    <div className="flex gap-4">
+                      <button onClick={() => setSettings({...settings, on_error_action: 'pause'})} className={`flex-1 py-3 rounded-xl border flex items-center justify-center gap-2 transition-all font-semibold text-sm ${settings.on_error_action === 'pause' ? 'bg-amber-500/10 border-amber-500/50 text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.1)]' : 'bg-zinc-950/50 border-zinc-800 text-zinc-500 hover:bg-zinc-800'}`}>
+                        <PauseCircle className="w-4 h-4" /> Pause Queue
+                      </button>
+                      <button onClick={() => setSettings({...settings, on_error_action: 'skip'})} className={`flex-1 py-3 rounded-xl border flex items-center justify-center gap-2 transition-all font-semibold text-sm ${settings.on_error_action === 'skip' ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]' : 'bg-zinc-950/50 border-zinc-800 text-zinc-500 hover:bg-zinc-800'}`}>
+                        <ChevronRight className="w-4 h-4" /> Skip to Next
+                      </button>
+                    </div>
+                  </div>
+                  
                 </div>
               </div>
               <div className="p-6 bg-zinc-900/80 border-t border-zinc-800/80 flex items-center justify-between">
