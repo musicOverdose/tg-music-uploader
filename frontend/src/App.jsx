@@ -77,7 +77,6 @@ export default function App() {
     setReportContent('');
   };
 
-  // UPDATED: Advanced clipboard fallback for HTTP connections
   const copyToClipboard = () => {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(reportContent).then(() => {
@@ -329,7 +328,7 @@ export default function App() {
             <div className="grid grid-cols-12 gap-8 h-full max-w-7xl mx-auto">
               <div className="col-span-4 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl shadow-xl">
                 
-                {/* UPDATED: Perfect Pixel Alignment for Header */}
+                {/* Header aligned perfectly with items */}
                 <div className="px-3 py-3 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className="w-5 h-5 flex justify-center items-center shrink-0">
@@ -539,7 +538,6 @@ export default function App() {
                 <div><label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Bot Token</label><input type="password" className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none font-mono" value={settings.bot_token} onChange={(e) => setSettings({ ...settings, bot_token: e.target.value })} /></div>
                 <div><label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Default Destination (@channel or -100123)</label><input type="text" className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none font-mono" value={settings.default_dest} onChange={(e) => setSettings({ ...settings, default_dest: e.target.value })} /></div>
                 
-                {/* UPDATED: Custom UI Spinners for Delay */}
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Min Delay (s)</label>
