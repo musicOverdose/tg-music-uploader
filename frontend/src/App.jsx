@@ -3,19 +3,19 @@ import {
   Folder, Music, Send, CheckCircle2, AlertCircle, 
   Settings as SettingsIcon, List, Server, Search, 
   PlayCircle, Clock, HardDrive, RefreshCw, LogOut, ChevronRight, Hash, FileText,
-  Image as ImageIcon, X, Edit3, Trash2, Copy, Check
+  Image as ImageIcon, X, Edit3, Trash2, Copy, Check, PauseCircle
 } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('library');
   const [folders, setFolders] = useState([]);
+  const [libStats, setLibStats] = useState({ total_folders: 0, total_files: 0 });
   const [selectedFolder, setSelectedFolder] = useState('');
   const [files, setFiles] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [settings, setSettings] = useState({ 
-    bot_token: '', default_dest: '', delay_per_file_min: 3, delay_per_file_max: 7
+    bot_token: '', default_dest: '', delay_per_file_min: 3, delay_per_file_max: 7, is_paused: false
   });
-  const [destOverride, setDestOverride] = useState('');
   const [botStatus, setBotStatus] = useState('');
   const [authRequired, setAuthRequired] = useState(false);
   const [password, setPassword] = useState('');
@@ -97,7 +97,6 @@ export default function App() {
     });
   };
 
-  // --- NEW: Toggle ALL folders done ---
   const toggleAllDone = async () => {
     const allDone = folders.length > 0 && folders.every(f => folderStatus[f.path]);
     const newStatus = !allDone;
@@ -120,7 +119,6 @@ export default function App() {
     });
   };
 
-  // --- NEW: Toggle ALL folders selected ---
   const toggleAllSelect = () => {
     if (folders.length > 0 && selectedFolders.size === folders.length) {
       setSelectedFolders(new Set());
@@ -141,12 +139,15 @@ export default function App() {
     if (res.status === 401) return setAuthRequired(true);
     const data = await res.json();
     setSettings(data);
-    setDestOverride(data.default_dest || '');
   };
 
   const fetchFolders = async () => {
     const res = await fetch('/api/library/tree');
-    if (res.ok) setFolders(await res.json());
+    if (res.ok) {
+      const data = await res.json();
+      setFolders(data.tree);
+      setLibStats({ total_folders: data.total_folders, total_files: data.total_files });
+    }
   };
 
   const loadFolderFiles = async (folderPath) => {
@@ -161,6 +162,17 @@ export default function App() {
     if (res.ok) setJobs(await res.json());
   };
 
+  const togglePauseQueue = async () => {
+    const res = await fetch('/api/queue/toggle_pause', { method: 'POST' });
+    const data = await res.json();
+    setSettings(s => ({...s, is_paused: data.is_paused}));
+  };
+
+  const retryFailedJobs = async () => {
+    await fetch('/api/queue/retry_failed', { method: 'POST' });
+    fetchQueue();
+  };
+
   const testBot = async () => {
     setBotStatus('Connecting...');
     const res = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
@@ -169,8 +181,8 @@ export default function App() {
   };
 
   const enqueue = async (filePaths, includeCover = false) => {
-    const dest = destOverride || settings.default_dest;
-    if (!dest) return alert('Please enter a destination channel (@channel or ID)');
+    const dest = settings.default_dest;
+    if (!dest) return alert('No destination channel set! Please configure it in Settings first.');
     setIsUploading(true);
     await fetch('/api/queue/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: filePaths, destination: dest, include_cover: includeCover }) });
     if (selectedFolder) toggleFolderStatus(selectedFolder, false);
@@ -180,8 +192,8 @@ export default function App() {
   };
 
   const uploadSelectedFolders = async () => {
-    const dest = destOverride || settings.default_dest;
-    if (!dest) return alert('Please enter a destination channel (@channel or ID)');
+    const dest = settings.default_dest;
+    if (!dest) return alert('No destination channel set! Please configure it in Settings first.');
     setIsUploading(true);
     await fetch('/api/queue/add_folders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -270,9 +282,11 @@ export default function App() {
             {selectedFolder && activeTab === 'library' && (<><ChevronRight className="w-4 h-4 text-zinc-600" /><span className="text-zinc-200">{selectedFolder.split('/').pop()}</span></>)}
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-lg px-3 py-1.5 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
-              <Send className="w-3.5 h-3.5 text-zinc-500 mr-2" />
-              <input type="text" placeholder="Dest: @channel or ID" className="bg-transparent border-none text-xs w-48 text-zinc-200 outline-none placeholder:text-zinc-600" value={destOverride} onChange={(e) => setDestOverride(e.target.value)} />
+            <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-lg px-4 py-2 shadow-sm">
+              <Send className="w-4 h-4 text-indigo-400 mr-2" />
+              <span className="text-xs font-medium text-zinc-300">
+                {settings.default_dest ? `Dest: ${settings.default_dest}` : 'Destination not set (Go to Settings)'}
+              </span>
             </div>
           </div>
         </header>
@@ -284,27 +298,31 @@ export default function App() {
             <div className="grid grid-cols-12 gap-8 h-full max-w-7xl mx-auto">
               <div className="col-span-4 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl shadow-xl">
                 
-                {/* HEADERS WITH SELECT ALL / DONE ALL */}
                 <div className="p-3 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
-                  <div className="flex items-center gap-3 pl-1">
-                    <button onClick={toggleAllDone} title="Toggle All Done" className="hover:scale-110 transition-transform">
-                      <CheckCircle2 className={`w-4 h-4 ${folders.length > 0 && folders.every(f => folderStatus[f.path]) ? 'text-emerald-500' : 'text-zinc-600'}`} />
-                    </button>
+                  <div className="flex items-center gap-3 pl-3">
+                    <div className="w-5 h-5 flex justify-center items-center shrink-0">
+                      <button onClick={toggleAllDone} title="Toggle All Done" className="hover:scale-110 transition-transform">
+                        <CheckCircle2 className={`w-4 h-4 ${folders.length > 0 && folders.every(f => folderStatus[f.path]) ? 'text-emerald-500' : 'text-zinc-600 hover:text-zinc-400'}`} />
+                      </button>
+                    </div>
                     <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                      <HardDrive className="w-3.5 h-3.5" /> Volumes ({folders.length})
+                      <HardDrive className="w-3.5 h-3.5" /> 
+                      Volumes <span className="bg-zinc-800 px-2 py-0.5 rounded-full text-zinc-400 normal-case tracking-normal">{libStats.total_folders} Albums • {libStats.total_files} Tracks</span>
                     </h3>
                   </div>
 
-                  <div className="flex items-center gap-3 pr-1">
+                  <div className="flex items-center gap-3 pr-3">
                     {selectedFolders.size > 0 && (
                       <button onClick={uploadSelectedFolders} disabled={isUploading} className="text-[10px] bg-indigo-500 hover:bg-indigo-400 text-white px-2 py-1 rounded font-bold transition-all shadow-md flex items-center gap-1">
                         <Send className="w-3 h-3" /> Upload {selectedFolders.size}
                       </button>
                     )}
-                    <button onClick={toggleAllSelect} title="Select All" className="group relative flex items-center justify-center w-5 h-5 transition-all">
-                      <div className={`absolute inset-0 rounded-full border-2 transition-all ${(folders.length > 0 && selectedFolders.size === folders.length) ? 'border-indigo-500 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'border-zinc-600 bg-zinc-900/50 group-hover:border-indigo-400'}`}></div>
-                      {(folders.length > 0 && selectedFolders.size === folders.length) && <div className="w-1.5 h-1.5 bg-white rounded-full relative z-10 transition-all"></div>}
-                    </button>
+                    <div className="w-5 h-5 flex justify-center items-center shrink-0">
+                      <button onClick={toggleAllSelect} title="Select All" className="group relative flex items-center justify-center w-5 h-5 transition-all">
+                        <div className={`absolute inset-0 rounded-full border-2 transition-all ${(folders.length > 0 && selectedFolders.size === folders.length) ? 'border-indigo-500 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'border-zinc-600 bg-zinc-900/50 group-hover:border-indigo-400'}`}></div>
+                        {(folders.length > 0 && selectedFolders.size === folders.length) && <div className="w-1.5 h-1.5 bg-white rounded-full relative z-10 transition-all"></div>}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -315,9 +333,11 @@ export default function App() {
                     return (
                       <div key={f.path} className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-all border border-transparent ${selectedFolder === f.path ? 'bg-indigo-500/10 shadow-sm' : 'hover:bg-zinc-800/50'}`}>
                         <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => loadFolderFiles(f.path)}>
-                          <button onClick={(e) => { e.stopPropagation(); toggleFolderStatus(f.path, isDone); }} className="hover:scale-110 transition-transform shrink-0">
-                            <CheckCircle2 className={`w-4 h-4 ${isDone ? 'text-emerald-500' : 'text-zinc-700 hover:text-zinc-500'}`} />
-                          </button>
+                          <div className="w-5 h-5 flex justify-center items-center shrink-0">
+                            <button onClick={(e) => { e.stopPropagation(); toggleFolderStatus(f.path, isDone); }} className="hover:scale-110 transition-transform">
+                              <CheckCircle2 className={`w-4 h-4 ${isDone ? 'text-emerald-500' : 'text-zinc-700 hover:text-zinc-500'}`} />
+                            </button>
+                          </div>
                           <Folder className={`w-4 h-4 shrink-0 ${selectedFolder === f.path ? 'fill-indigo-500/20 text-indigo-400' : 'text-zinc-500'}`} />
                           <span className={`truncate font-medium ${isDone ? 'text-emerald-500/70 line-through decoration-emerald-500/30' : 'text-zinc-300'}`}>
                             {f.name}
@@ -325,10 +345,12 @@ export default function App() {
                         </div>
                         
                         <div className="flex items-center shrink-0 ml-2">
-                          <button onClick={(e) => { e.stopPropagation(); toggleFolderSelection(f.path); }} className="group relative flex items-center justify-center w-5 h-5 transition-all">
-                            <div className={`absolute inset-0 rounded-full border-2 transition-all ${isSelected ? 'border-indigo-500 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'border-zinc-600 bg-zinc-900/50 group-hover:border-indigo-400'}`}></div>
-                            {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full relative z-10 transition-all"></div>}
-                          </button>
+                          <div className="w-5 h-5 flex justify-center items-center">
+                            <button onClick={(e) => { e.stopPropagation(); toggleFolderSelection(f.path); }} className="group relative flex items-center justify-center w-5 h-5 transition-all">
+                              <div className={`absolute inset-0 rounded-full border-2 transition-all ${isSelected ? 'border-indigo-500 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'border-zinc-600 bg-zinc-900/50 group-hover:border-indigo-400'}`}></div>
+                              {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full relative z-10 transition-all"></div>}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -408,8 +430,22 @@ export default function App() {
           {activeTab === 'queue' && (
             <div className="max-w-5xl mx-auto bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl backdrop-blur-xl flex flex-col h-full">
               <div className="p-6 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
-                <div><h3 className="text-lg font-bold text-zinc-100">Upload Task Queue</h3><p className="text-xs text-zinc-500 mt-1">Monitoring background upload workers</p></div>
-                <button onClick={() => fetch('/api/queue/clear', { method: 'POST' }).then(fetchQueue)} className="text-xs font-semibold bg-zinc-800/80 hover:bg-red-500/20 hover:text-red-400 border border-zinc-700 hover:border-red-500/30 px-4 py-2 rounded-lg text-zinc-300 transition-all flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5" /> Force Clear All</button>
+                <div>
+                  <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-3">
+                    Upload Task Queue
+                    {settings.is_paused && <span className="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-amber-500/30 flex items-center gap-1"><PauseCircle className="w-3 h-3"/> Paused</span>}
+                  </h3>
+                  <p className="text-xs text-zinc-500 mt-1">Monitoring background upload workers</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {jobs.some(j => j.status === 'failed') && (
+                     <button onClick={retryFailedJobs} className="text-xs font-semibold px-4 py-2 rounded-lg bg-zinc-800/80 hover:bg-indigo-500/20 hover:text-indigo-400 border border-zinc-700 transition-all flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5" /> Retry Failed</button>
+                  )}
+                  <button onClick={togglePauseQueue} className={`text-xs font-semibold px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${settings.is_paused ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30' : 'bg-zinc-800/80 hover:bg-amber-500/10 hover:text-amber-400 border border-zinc-700'}`}>
+                    {settings.is_paused ? '▶ Resume Queue' : '⏸ Pause Queue'}
+                  </button>
+                  <button onClick={() => fetch('/api/queue/clear', { method: 'POST' }).then(fetchQueue)} className="text-xs font-semibold bg-zinc-800/80 hover:bg-red-500/20 hover:text-red-400 border border-zinc-700 hover:border-red-500/30 px-4 py-2 rounded-lg text-zinc-300 transition-all flex items-center gap-2"><Trash2 className="w-3.5 h-3.5" /> Force Clear All</button>
+                </div>
               </div>
               <div className="p-4 space-y-2 overflow-y-auto flex-1">
                 {jobs.map((job) => (
