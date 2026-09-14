@@ -3,18 +3,19 @@ import {
   Folder, Music, Send, CheckCircle2, AlertCircle, 
   Settings as SettingsIcon, List, Server, Search, 
   PlayCircle, Clock, HardDrive, RefreshCw, LogOut, ChevronRight, Hash, FileText,
-  Image as ImageIcon, X, Edit3, Trash2, Copy, Check, PauseCircle, Radio
+  Image as ImageIcon, X, Edit3, Trash2, Copy, Check, PauseCircle, Radio, ArrowUpCircle, Download
 } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('library');
+  const [queueTab, setQueueTab] = useState('active'); // active, done, failed
+  
   const [folders, setFolders] = useState([]);
   const [libStats, setLibStats] = useState({ total_folders: 0, total_files: 0 });
   const [selectedFolder, setSelectedFolder] = useState('');
   const [files, setFiles] = useState([]);
   const [jobs, setJobs] = useState([]);
   
-  // RESTORED: on_error_action: 'pause' is back in settings state
   const [settings, setSettings] = useState({ 
     bot_token: '', default_dest: '', delay_per_file_min: 3, delay_per_file_max: 7, is_paused: false, bot_name: '', dest_name: '', on_error_action: 'pause'
   });
@@ -272,6 +273,7 @@ export default function App() {
     if (res.ok) alert(`Cleaned extra tags from ${data.cleaned} files!`);
   };
 
+  // RESTORED: These three lines calculate the items in each tab of your queue!
   const activeJobsList = jobs.filter(j => j.status === 'uploading' || j.status === 'pending').sort((a, b) => {
     if (a.status === 'uploading') return -1;
     if (b.status === 'uploading') return 1;
@@ -601,7 +603,6 @@ export default function App() {
                     </div>
                   </div>
                   
-                  {/* RESTORED: Error Handling Actions */}
                   <div className="col-span-2 mt-2">
                     <label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">If Upload Fails (after 3 retries)</label>
                     <div className="flex gap-4">
