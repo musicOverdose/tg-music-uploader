@@ -115,7 +115,9 @@ async def process_queue():
                         else:
                             failed_job.status, failed_job.error_msg = "failed", err
                             settings_obj = session.get(Settings, 1)
-                            settings_obj.is_paused = True  # PAUSE ENTIRE QUEUE TO PREVENT ORDER LOSS
+                            # NEW: Check user settings before pausing
+                            if settings_obj.on_error_action == "pause":
+                                settings_obj.is_paused = True 
                             session.add(failed_job)
                             session.add(settings_obj)
                             session.commit()
