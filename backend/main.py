@@ -70,6 +70,7 @@ class SettingsUpdate(BaseModel):
     delay_per_file_min: int
     delay_per_file_max: int
 
+# --- UPDATED: Fetch & Save Bot/Channel Names dynamically ---
 @app.post("/api/settings")
 async def update_settings(data: SettingsUpdate):
     with Session(engine) as session:
@@ -78,17 +79,32 @@ async def update_settings(data: SettingsUpdate):
         settings.default_dest = data.default_dest
         settings.delay_per_file_min = data.delay_per_file_min
         settings.delay_per_file_max = data.delay_per_file_max
+        
+        bot_name = settings.bot_name
+        dest_name = settings.dest_name
+
+        if data.bot_token:
+            tg_client.set_token(data.bot_token)
+            try:
+                bot_info = await tg_client.get_me()
+                bot_name = bot_info.get("first_name", bot_info.get("username", "Unknown Bot"))
+                settings.bot_name = bot_name
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Bot Error: {str(e)}")
+
+            if data.default_dest:
+                try:
+                    chat_info = await tg_client.get_chat(data.default_dest)
+                    dest_name = chat_info.get("title", chat_info.get("first_name", data.default_dest))
+                    settings.dest_name = dest_name
+                except Exception:
+                    # Fallback to ID if bot isn't admin yet or chat is strictly private
+                    settings.dest_name = data.default_dest
+                    dest_name = data.default_dest
+
         session.add(settings)
         session.commit()
-        
-    if data.bot_token:
-        try:
-            tg_client.set_token(data.bot_token)
-            username = await tg_client.get_me()
-            return {"status": "ok", "bot_username": username}
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
-    return {"status": "ok"}
+        return {"status": "ok", "bot_name": bot_name, "dest_name": dest_name}
 
 @app.get("/api/report")
 def get_report():
@@ -232,7 +248,6 @@ def clear_queue():
         session.commit()
     return {"status": "cleared"}
 
-# NEW: Queue Pause & Retry Routes
 @app.post("/api/queue/toggle_pause")
 def toggle_pause():
     with Session(engine) as session:
