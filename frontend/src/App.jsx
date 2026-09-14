@@ -77,10 +77,31 @@ export default function App() {
     setReportContent('');
   };
 
+  // UPDATED: Advanced clipboard fallback for HTTP connections
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(reportContent);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(reportContent).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = reportContent;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Fallback copy failed', err);
+        alert("Copy failed. Your browser blocked clipboard access.");
+      }
+      document.body.removeChild(textArea);
+    }
   };
 
   const fetchFolderStatus = async () => {
@@ -179,7 +200,7 @@ export default function App() {
     const data = await res.json();
     if (res.ok) { 
       setBotStatus(`Connected Successfully!`); 
-      fetchSettings(); // Refresh to get the new display names
+      fetchSettings();
     } else { 
       setBotStatus(`Error: ${data.detail || 'Connection failed'}`); 
     }
@@ -282,7 +303,6 @@ export default function App() {
       <main className="flex-1 flex flex-col relative overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed bg-center">
         <div className="absolute inset-0 bg-zinc-950/95 z-0"></div>
         
-        {/* UPDATED HEADER: Displaying dynamically fetched Names */}
         <header className="h-16 border-b border-zinc-800/80 px-8 flex items-center justify-between relative z-10 bg-zinc-900/30 backdrop-blur-sm">
           <div className="flex items-center gap-2 text-sm text-zinc-400 font-medium tracking-wide">
             {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} 
@@ -309,8 +329,9 @@ export default function App() {
             <div className="grid grid-cols-12 gap-8 h-full max-w-7xl mx-auto">
               <div className="col-span-4 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl shadow-xl">
                 
-                <div className="p-3 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
-                  <div className="flex items-center gap-3 pl-3">
+                {/* UPDATED: Perfect Pixel Alignment for Header */}
+                <div className="px-3 py-3 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
+                  <div className="flex items-center gap-3">
                     <div className="w-5 h-5 flex justify-center items-center shrink-0">
                       <button onClick={toggleAllDone} title="Toggle All Done" className="hover:scale-110 transition-transform">
                         <CheckCircle2 className={`w-4 h-4 ${folders.length > 0 && folders.every(f => folderStatus[f.path]) ? 'text-emerald-500' : 'text-zinc-600 hover:text-zinc-400'}`} />
@@ -322,7 +343,7 @@ export default function App() {
                     </h3>
                   </div>
 
-                  <div className="flex items-center gap-3 pr-3">
+                  <div className="flex items-center gap-3">
                     {selectedFolders.size > 0 && (
                       <button onClick={uploadSelectedFolders} disabled={isUploading} className="text-[10px] bg-indigo-500 hover:bg-indigo-400 text-white px-2 py-1 rounded font-bold transition-all shadow-md flex items-center gap-1">
                         <Send className="w-3 h-3" /> Upload {selectedFolders.size}
@@ -497,7 +518,7 @@ export default function App() {
                 <div className="flex items-center gap-3">
                   <button onClick={copyToClipboard} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all shadow-md">
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copied ? 'Copied to Clipboard!' : 'Copy All Links'}
+                    {copied ? 'Copied!' : 'Copy All Links'}
                   </button>
                   <button onClick={saveReport} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2.5 rounded-lg transition-all">{reportSaved ? 'Saved!' : 'Save Changes'}</button>
                   <button onClick={clearReport} className="bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 border border-zinc-700 px-3 py-2.5 rounded-lg text-xs font-semibold text-zinc-400 transition-all">Clear</button>
@@ -513,12 +534,29 @@ export default function App() {
           {activeTab === 'settings' && (
             <div className="max-w-2xl mx-auto bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl backdrop-blur-xl">
               <div className="p-6 border-b border-zinc-800/80 bg-zinc-900/50"><h3 className="text-base font-bold text-zinc-100 flex items-center gap-2"><SettingsIcon className="w-4 h-4 text-indigo-400" /> API Configuration</h3></div>
+              
               <div className="p-8 space-y-6">
                 <div><label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Bot Token</label><input type="password" className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none font-mono" value={settings.bot_token} onChange={(e) => setSettings({ ...settings, bot_token: e.target.value })} /></div>
                 <div><label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Default Destination (@channel or -100123)</label><input type="text" className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none font-mono" value={settings.default_dest} onChange={(e) => setSettings({ ...settings, default_dest: e.target.value })} /></div>
+                
+                {/* UPDATED: Custom UI Spinners for Delay */}
                 <div className="grid grid-cols-2 gap-6">
-                  <div><label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Min Delay (s)</label><input type="number" className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none" value={settings.delay_per_file_min} onChange={(e) => setSettings({ ...settings, delay_per_file_min: parseInt(e.target.value) || 0 })} /></div>
-                  <div><label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Max Delay (s)</label><input type="number" className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-zinc-100 outline-none" value={settings.delay_per_file_max} onChange={(e) => setSettings({ ...settings, delay_per_file_max: parseInt(e.target.value) || 0 })} /></div>
+                  <div>
+                    <label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Min Delay (s)</label>
+                    <div className="flex items-center bg-zinc-950/50 border border-zinc-800 rounded-xl focus-within:border-indigo-500 overflow-hidden">
+                      <button onClick={() => setSettings({...settings, delay_per_file_min: Math.max(0, settings.delay_per_file_min - 1)})} className="w-11 h-11 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors font-mono text-lg border-r border-zinc-800">-</button>
+                      <input type="number" className="flex-1 w-full bg-transparent text-center text-sm text-zinc-100 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={settings.delay_per_file_min} onChange={(e) => setSettings({ ...settings, delay_per_file_min: parseInt(e.target.value) || 0 })} />
+                      <button onClick={() => setSettings({...settings, delay_per_file_min: settings.delay_per_file_min + 1})} className="w-11 h-11 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors font-mono text-lg border-l border-zinc-800">+</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="flex text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Max Delay (s)</label>
+                    <div className="flex items-center bg-zinc-950/50 border border-zinc-800 rounded-xl focus-within:border-indigo-500 overflow-hidden">
+                      <button onClick={() => setSettings({...settings, delay_per_file_max: Math.max(0, settings.delay_per_file_max - 1)})} className="w-11 h-11 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors font-mono text-lg border-r border-zinc-800">-</button>
+                      <input type="number" className="flex-1 w-full bg-transparent text-center text-sm text-zinc-100 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={settings.delay_per_file_max} onChange={(e) => setSettings({ ...settings, delay_per_file_max: parseInt(e.target.value) || 0 })} />
+                      <button onClick={() => setSettings({...settings, delay_per_file_max: settings.delay_per_file_max + 1})} className="w-11 h-11 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors font-mono text-lg border-l border-zinc-800">+</button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="p-6 bg-zinc-900/80 border-t border-zinc-800/80 flex items-center justify-between">
