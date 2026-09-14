@@ -5,13 +5,17 @@ from mutagen import File as MutagenFile
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC, TYER, TRCK, ID3NoHeaderError
 
 def get_directory_tree(path="/music"):
-    if not os.path.exists(path): return []
+    if not os.path.exists(path): return {"tree": [], "total_folders": 0, "total_files": 0}
     tree = []
+    total_files = 0
     for item in os.listdir(path):
         full_path = os.path.join(path, item)
         if os.path.isdir(full_path):
+            mp3_count = len([f for f in os.listdir(full_path) if f.lower().endswith('.mp3')])
+            total_files += mp3_count
             tree.append({"name": item, "path": full_path, "type": "folder"})
-    return sorted(tree, key=lambda x: x["name"].lower())
+    tree.sort(key=lambda x: x["name"].lower())
+    return {"tree": tree, "total_folders": len(tree), "total_files": total_files}
 
 def get_files_in_dir(path):
     if not os.path.exists(path) or not os.path.isdir(path): return []
@@ -37,7 +41,6 @@ def find_cover(folder_path):
             return os.path.join(folder_path, item)
     return None
 
-# --- NEW: Extract and resize embedded APIC Cover ---
 def extract_and_resize_cover_from_mp3(filepath):
     try:
         audio = ID3(filepath)
