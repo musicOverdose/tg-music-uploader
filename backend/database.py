@@ -16,7 +16,11 @@ class Settings(SQLModel, table=True):
     report_channel: str = Field(default="")
     report_message_id: str = Field(default="")
     report_text: str = Field(default="")
-    is_paused: bool = Field(default=False)  # NEW: Pauses upload queue
+    is_paused: bool = Field(default=False)
+    
+    # NEW: Store friendly names
+    bot_name: str = Field(default="")
+    dest_name: str = Field(default="")
 
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -27,7 +31,7 @@ class Job(SQLModel, table=True):
     error_msg: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     is_cover_job: bool = Field(default=False)
-    attempts: int = Field(default=0)  # NEW: Tracks retry attempts
+    attempts: int = Field(default=0)
 
 class UploadedFolder(SQLModel, table=True):
     path: str = Field(primary_key=True)
@@ -40,6 +44,10 @@ def init_db():
         try: session.exec(text("ALTER TABLE settings ADD COLUMN is_paused BOOLEAN DEFAULT 0"))
         except: pass
         try: session.exec(text("ALTER TABLE job ADD COLUMN attempts INTEGER DEFAULT 0"))
+        except: pass
+        try: session.exec(text("ALTER TABLE settings ADD COLUMN bot_name VARCHAR DEFAULT ''"))
+        except: pass
+        try: session.exec(text("ALTER TABLE settings ADD COLUMN dest_name VARCHAR DEFAULT ''"))
         except: pass
         session.commit()
         
