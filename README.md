@@ -13,7 +13,7 @@
 
   <br />
   <p align="center">
-    An elegant, rate-limit-safe web dashboard for uploading entire MP3 albums directly from your VPS to Telegram channels and groups, complete with ID3 tags and cover art.
+    An elegant, rate-limit-safe web dashboard for uploading entire MP3 albums directly from your VPS to Telegram channels and groups, complete with ID3 tags, dynamic thumbnail resizing, and automated cataloging.
   </p>
 
 </div>
@@ -23,11 +23,12 @@
 ## ✨ Key Features
 
 * 🎛️ **Premium "Studio Panel" WebUI**: A stunning, modern dark-mode interface built with React, Vite, and TailwindCSS, featuring glass-morphism and live WebSocket updates.
-* 📂 **Local Library Browser**: Browse your VPS music folders directly from your browser.
-* 🎵 **Smart Metadata**: Automatically extracts ID3 tags (Title, Artist, Duration) and detects `cover.jpg` to send visually perfect Telegram audio files.
-* 🚦 **Intelligent Queue System**: Built-in background worker that processes uploads sequentially.
+* 📝 **Built-in ID3 Metadata Editor**: Edit Title, Artist, Album, Year, and Track numbers directly from your browser. Includes a **Bulk Clean** tool to strip out unwanted lyrics or junk tags.
+* 🖼️ **Smart Cover Art Engine**: Automatically extracts embedded high-res APIC cover art from MP3s and dynamically resizes them (using Pillow) to bypass Telegram's strict 320x320 thumbnail limits for guaranteed visual previews.
+* 🚦 **Advanced Queue Management**: Full control over your uploads. Features Active, Completed, and Failed tabs, "Move to Top" prioritization, and a master Pause/Resume switch. Auto-pauses after 3 failed retries to protect your channel's upload order.
+* 🗂️ **Automated Catalog Indexer**: Automatically generates a downloadable `report.txt` file containing beautifully formatted Markdown links (`[Year - Album](link)`) of your uploaded albums for easy channel indexing.
 * 🛡️ **Rate Limit Protection**: Fully customizable minimum and maximum delays between songs, with automatic handling of Telegram's `FLOOD_WAIT` restrictions.
-* 🐳 **Frictionless Deployment**: Packaged as a lightweight multi-stage Docker container optimized for Portainer.
+* 📂 **Bulk Operations**: Multi-select folders, track "Done" statuses, and push dozens of albums to the queue with a single click.
 
 ---
 
@@ -35,9 +36,10 @@
 
 ### Backend
 * **Python 3.11** + **FastAPI**: High-performance asynchronous REST API.
-* **SQLite** + **SQLModel**: Persistent storage for background jobs and settings.
+* **SQLite** + **SQLModel**: Persistent storage for background jobs, folder states, and settings.
 * **HTTPX**: Direct asynchronous communication with the Telegram Bot API.
-* **Mutagen**: For precise audio metadata extraction.
+* **Mutagen & Pillow**: For precise audio metadata extraction and dynamic image resizing.
+* **WebSockets**: Real-time progress bar streaming to the UI.
 
 ### Frontend
 * **React 18** + **Vite**: Lightning-fast UI rendering.
@@ -79,4 +81,5 @@ services:
       - TZ=Asia/Tehran
     volumes:
       - /path/to/your/data:/data
-      - /path/to/your/music:/music:ro
+      # NOTE: Do NOT use ':ro' (read-only) if you want to use the Metadata Editor/Cleaner features!
+      - /path/to/your/music:/music
