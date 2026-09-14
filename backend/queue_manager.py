@@ -4,7 +4,6 @@ import os
 from sqlmodel import Session, select
 from backend.database import engine, Job, Settings
 from backend.telegram_client import tg_client
-# --- IMPORT OUR NEW FUNCTION ---
 from backend.library import extract_metadata, find_cover, extract_and_resize_cover_from_mp3
 
 connected_clients = set()
@@ -19,18 +18,20 @@ def append_to_report(year: str, album: str, link: str):
     report_file = "/data/report.txt"
     line = f"[{year} - {album}]({link})\n"
     try:
-        with open(report_file, "a", encoding="utf-8") as f:
-            f.write(line)
-    except Exception as e:
-        print(f"Failed to write to report.txt: {e}", flush=True)
+        with open(report_file, "a", encoding="utf-8") as f: f.write(line)
+    except: pass
 
 async def process_queue():
     while True:
         try:
             with Session(engine) as session:
                 settings = session.get(Settings, 1)
+                if not settings or not settings.bot_token or settings.is_paused:
+                    await asyncio.sleep(3)
+                    continue
+
                 job = session.exec(select(Job).where(Job.status == "pending").order_by(Job.created_at)).first()
-                if not job or not settings or not settings.bot_token:
+                if not job:
                     await asyncio.sleep(3)
                     continue
 
@@ -74,11 +75,7 @@ async def process_queue():
 
                 else:
                     meta = extract_metadata(job_file_path)
-                    
-                    # --- NEW: Dynamically grab resized 320x320 thumbnail from APIC tag ---
                     thumb_bytes = extract_and_resize_cover_from_mp3(job_file_path)
-                    
-                    # If the MP3 had no cover, fallback to scanning the folder
                     thumb_path = None
                     if not thumb_bytes:
                         thumb_path = find_cover(os.path.dirname(job_file_path))
@@ -101,6 +98,7 @@ async def process_queue():
                 with Session(engine) as session:
                     failed_job = session.get(Job, job_id)
                     if failed_job:
+                        failed_job.attempts += 1
                         if "FLOOD_WAIT_" in err:
                             w = int(err.split("FLOOD_WAIT_")[1])
                             failed_job.status, failed_job.error_msg = "pending", f"Rate limited. Wait {w}s"
@@ -108,9 +106,18 @@ async def process_queue():
                             session.commit()
                             await broadcast_progress(job_id, 0, "rate_limited")
                             await asyncio.sleep(w + 2)
+                        elif failed_job.attempts <= 3:
+                            failed_job.status, failed_job.error_msg = "pending", f"Retry {failed_job.attempts}/3: {err}"
+                            session.add(failed_job)
+                            session.commit()
+                            await broadcast_progress(job_id, 0, "pending")
+                            await asyncio.sleep(4)
                         else:
                             failed_job.status, failed_job.error_msg = "failed", err
+                            settings_obj = session.get(Settings, 1)
+                            settings_obj.is_paused = True  # PAUSE ENTIRE QUEUE TO PREVENT ORDER LOSS
                             session.add(failed_job)
+                            session.add(settings_obj)
                             session.commit()
                             await broadcast_progress(job_id, 0, "failed")
 
