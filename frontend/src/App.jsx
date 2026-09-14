@@ -328,8 +328,8 @@ export default function App() {
             <div className="grid grid-cols-12 gap-8 h-full max-w-7xl mx-auto">
               <div className="col-span-4 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl shadow-xl">
                 
-                {/* Header aligned perfectly with items */}
-                <div className="px-3 py-3 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
+                {/* FIXED PADDING: px-5 to match the list items (px-2 parent + px-3 child = 20px) */}
+                <div className="px-5 py-3 border-b border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className="w-5 h-5 flex justify-center items-center shrink-0">
                       <button onClick={toggleAllDone} title="Toggle All Done" className="hover:scale-110 transition-transform">
@@ -357,11 +357,13 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="p-3 overflow-y-auto flex-1 space-y-1">
+                {/* FIXED PADDING: px-2 parent */}
+                <div className="px-2 py-2 overflow-y-auto flex-1 space-y-1">
                   {folders.map((f) => {
                     const isDone = folderStatus[f.path] || false;
                     const isSelected = selectedFolders.has(f.path);
                     return (
+                      // FIXED PADDING: px-3 child
                       <div key={f.path} className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-all border border-transparent ${selectedFolder === f.path ? 'bg-indigo-500/10 shadow-sm' : 'hover:bg-zinc-800/50'}`}>
                         <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => loadFolderFiles(f.path)}>
                           <div className="w-5 h-5 flex justify-center items-center shrink-0">
