@@ -1,5 +1,6 @@
 import os
 import asyncio
+import datetime
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
@@ -69,8 +70,8 @@ class SettingsUpdate(BaseModel):
     default_dest: str
     delay_per_file_min: int
     delay_per_file_max: int
+    on_error_action: str
 
-# --- UPDATED: Fetch & Save Bot/Channel Names dynamically ---
 @app.post("/api/settings")
 async def update_settings(data: SettingsUpdate):
     with Session(engine) as session:
@@ -79,6 +80,7 @@ async def update_settings(data: SettingsUpdate):
         settings.default_dest = data.default_dest
         settings.delay_per_file_min = data.delay_per_file_min
         settings.delay_per_file_max = data.delay_per_file_max
+        settings.on_error_action = data.on_error_action
         
         bot_name = settings.bot_name
         dest_name = settings.dest_name
@@ -98,7 +100,6 @@ async def update_settings(data: SettingsUpdate):
                     dest_name = chat_info.get("title", chat_info.get("first_name", data.default_dest))
                     settings.dest_name = dest_name
                 except Exception:
-                    # Fallback to ID if bot isn't admin yet or chat is strictly private
                     settings.dest_name = data.default_dest
                     dest_name = data.default_dest
 
@@ -110,6 +111,11 @@ async def update_settings(data: SettingsUpdate):
 def get_report():
     if not os.path.exists(REPORT_PATH): return {"content": ""}
     with open(REPORT_PATH, "r", encoding="utf-8") as f: return {"content": f.read()}
+
+@app.get("/api/report/download")
+def download_report():
+    if not os.path.exists(REPORT_PATH): raise HTTPException(status_code=404)
+    return FileResponse(REPORT_PATH, media_type="text/plain", filename="catalog_report.txt")
 
 class ReportUpdateReq(BaseModel):
     content: str
@@ -247,6 +253,27 @@ def clear_queue():
         for j in jobs: session.delete(j)
         session.commit()
     return {"status": "cleared"}
+
+# NEW: Advanced Queue Operations
+@app.post("/api/queue/clear_by_status/{status}")
+def clear_queue_status(status: str):
+    with Session(engine) as session:
+        jobs = session.exec(select(Job).where(Job.status == status)).all()
+        for j in jobs: session.delete(j)
+        session.commit()
+    return {"status": "cleared"}
+
+@app.post("/api/queue/move_top/{job_id}")
+def move_to_top(job_id: int):
+    with Session(engine) as session:
+        job = session.get(Job, job_id)
+        if job and job.status == "pending":
+            oldest = session.exec(select(Job).where(Job.status == "pending").order_by(Job.created_at)).first()
+            if oldest and oldest.id != job.id:
+                job.created_at = oldest.created_at - datetime.timedelta(seconds=1)
+                session.add(job)
+                session.commit()
+    return {"status": "ok"}
 
 @app.post("/api/queue/toggle_pause")
 def toggle_pause():
