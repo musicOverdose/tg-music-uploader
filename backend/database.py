@@ -17,10 +17,10 @@ class Settings(SQLModel, table=True):
     report_message_id: str = Field(default="")
     report_text: str = Field(default="")
     is_paused: bool = Field(default=False)
-    
-    # NEW: Store friendly names
     bot_name: str = Field(default="")
     dest_name: str = Field(default="")
+    # NEW: Error handling action
+    on_error_action: str = Field(default="pause")
 
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -40,7 +40,6 @@ class UploadedFolder(SQLModel, table=True):
 def init_db():
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
-        # Auto-migrate existing databases
         try: session.exec(text("ALTER TABLE settings ADD COLUMN is_paused BOOLEAN DEFAULT 0"))
         except: pass
         try: session.exec(text("ALTER TABLE job ADD COLUMN attempts INTEGER DEFAULT 0"))
@@ -48,6 +47,8 @@ def init_db():
         try: session.exec(text("ALTER TABLE settings ADD COLUMN bot_name VARCHAR DEFAULT ''"))
         except: pass
         try: session.exec(text("ALTER TABLE settings ADD COLUMN dest_name VARCHAR DEFAULT ''"))
+        except: pass
+        try: session.exec(text("ALTER TABLE settings ADD COLUMN on_error_action VARCHAR DEFAULT 'pause'"))
         except: pass
         session.commit()
         
